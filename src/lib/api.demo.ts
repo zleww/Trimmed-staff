@@ -151,6 +151,8 @@ function slotsFor(serviceId: string, branchId: string | null, barberId: string |
 // In the sample data, signing in with an email that starts with "owner@" or "desk@"
 // makes you staff, so the shop screens can be tried.
 function demoRole(): StaffRole | null {
+  // like the database: no shop role until the two-step code is entered
+  if (twoStep.on && !twoStep.verified) return null
   const email = session?.email ?? ''
   return email.startsWith('owner@') ? 'owner' : email.startsWith('desk@') ? 'desk' : null
 }
@@ -235,6 +237,7 @@ export const demoApi: Api = {
     if (session) session = { ...session, pending: null }
   },
   async signOut() {
+    twoStep.verified = false
     setSession(null)
   },
 
@@ -642,6 +645,34 @@ export const demoApi: Api = {
     return { closed: true }
   },
 
+  // sample two-step: any 6 digits work, so the screens can be tried
+  async needsSignInCode() {
+    return twoStep.on && !twoStep.verified
+  },
+  async verifySignInCode(code) {
+    await wait()
+    if (!/^\d{6}$/.test(code.trim())) throw new Error('That code is wrong or too old. Type the newest code from the app.')
+    twoStep.verified = true
+  },
+  async twoStepStatus() {
+    await wait(150)
+    return { on: twoStep.on }
+  },
+  async startTwoStep() {
+    await wait()
+    return { factorId: 'sample-factor', qrCode: SAMPLE_QR, secret: 'SAMPLESECRETKEY234' }
+  },
+  async confirmTwoStep(_factorId, code) {
+    await wait()
+    if (!/^\d{6}$/.test(code.trim())) throw new Error('That code is wrong or too old. Type the newest code from the app.')
+    twoStep.on = true
+    twoStep.verified = true
+  },
+  async turnOffTwoStep() {
+    await wait()
+    twoStep.on = false
+  },
+
   async staffList() {
     await wait()
     needOwner()
@@ -848,3 +879,11 @@ function queueRow(id: string): SampleRow {
   if (!row) throw new Error('Appointment not found')
   return row
 }
+
+// sample two-step state (a fresh page load signs you out in sample mode anyway)
+const twoStep = { on: false, verified: false }
+const SAMPLE_QR =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/><path d="M1 1h3v3H1zM6 1h3v3H6zM1 6h3v3H1zM5 5h1v1H5zM7 6h1v2H7z" fill="#000"/></svg>',
+  )

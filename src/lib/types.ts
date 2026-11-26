@@ -239,6 +239,15 @@ export type Api = {
   /** blind count: the desk types what it counted; only the owner gets the differences back */
   closeDay(count: DayCount): Promise<CloseResult>
 
+  // two-step sign-in: a 6-digit code from an authenticator app after the password
+  /** true when this account has an authenticator app but the code isn't entered yet */
+  needsSignInCode(): Promise<boolean>
+  verifySignInCode(code: string): Promise<void>
+  twoStepStatus(): Promise<{ on: boolean }>
+  startTwoStep(): Promise<TwoStepSetup>
+  confirmTwoStep(factorId: string, code: string): Promise<void>
+  turnOffTwoStep(): Promise<void>
+
   // owner: staff accounts (logins are made by the staff-admin server function)
   staffList(): Promise<StaffMember[]>
   createStaff(input: NewStaff): Promise<void>
@@ -346,3 +355,6 @@ export type InventoryItem = { id: string; name: string; price_centavos: number; 
 
 /** id null = a new product */
 export type ProductInput = { id: string | null; name: string; price_centavos: number; low_stock_at: number; active: boolean }
+
+/** What the authenticator app needs to scan when two-step sign-in is turned on. */
+export type TwoStepSetup = { factorId: string; qrCode: string; secret: string }

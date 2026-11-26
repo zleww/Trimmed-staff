@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Outlet } from 'react-router'
-import { Calendar, CheckCircle, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Sun, User, Users, X } from './components/icons'
+import { Calendar, CheckCircle, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Settings, Sun, User, Users, X } from './components/icons'
 import { LogoMark } from './components/Logo'
 import { Button, Skeleton } from './components/ui'
 import { isDemo } from './lib/api'
@@ -13,7 +13,7 @@ const today = new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long',
 // The staff app shell: left panel + top bar from tablet size up, tab bar on phones.
 // This only hides screens; the database checks the role on every call.
 export function StaffLayout() {
-  const { session, profile, staffRole, signOut } = useAuth()
+  const { session, profile, staffRole, needsCode, signOut } = useAuth()
   const [sheet, setSheet] = useState(false)
   // Esc closes the More sheet
   useEffect(() => {
@@ -23,7 +23,7 @@ export function StaffLayout() {
     return () => window.removeEventListener('keydown', onKey)
   }, [sheet])
 
-  if (session === null || staffRole === null) return <Navigate to="/signin" replace />
+  if (session === null || staffRole === null || needsCode) return <Navigate to="/signin" replace />
   if (session === undefined || staffRole === undefined) return <Skeleton className="m-6 h-64" />
   if (staffRole === 'barber') {
     return (
@@ -53,8 +53,8 @@ export function StaffLayout() {
   const groups = staffRole === 'owner' ? [{ title: 'Owner', items: owner }, { title: 'Front desk', items: desk }] : [{ title: 'Front desk', items: desk }]
   const all = groups.flatMap((g) => g.items)
   // phones: four tabs; the rest sit under More
-  const tabs = all.slice(0, staffRole === 'owner' ? 3 : 4)
-  const more = all.slice(tabs.length)
+  const tabs = all.slice(0, 3)
+  const more = [...all.slice(tabs.length), { to: '/security', label: 'Security', icon: Settings }]
   const leave = () => void signOut()
   const role = staffRole === 'owner' ? 'Owner' : 'Front desk'
   const name = profile?.full_name ?? role
@@ -79,7 +79,11 @@ export function StaffLayout() {
             </div>
           ))}
         </nav>
-        <button onClick={leave} className="mt-auto flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] text-ink-2 hover:bg-raised/60 hover:text-ink">
+        {/* pinned to the bottom, like settings */}
+        <div className="mt-auto">
+          <PanelLink item={{ to: '/security', label: 'Security', icon: Settings }} />
+        </div>
+        <button onClick={leave} className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] text-ink-2 hover:bg-raised/60 hover:text-ink">
           <LogOut size={19} />
           Sign out
         </button>

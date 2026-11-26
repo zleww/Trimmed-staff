@@ -11,6 +11,9 @@ type AuthValue = {
   profile: Profile | null | undefined
   /** undefined while loading, null for customers */
   staffRole: StaffRole | null | undefined
+  /** true when the password is in but the authenticator code isn't yet */
+  needsCode: boolean | undefined
+  verifyCode: (code: string) => Promise<void>
   setProfile: (profile: Profile) => void
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, details: SignupDetails) => Promise<{ needsConfirm: boolean }>
@@ -25,6 +28,9 @@ export function AuthProvider({ children, profileTheme = true }: { children: Reac
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [profile, setProfileState] = useState<Profile | null | undefined>(undefined)
   const [staffRole, setStaffRole] = useState<StaffRole | null | undefined>(undefined)
+  const [needsCode, setNeedsCode] = useState<boolean | undefined>(undefined)
+  // bumped after the two-step code, so the role loads again with the stronger sign-in
+  const [level, setLevel] = useState(0)
 
   useEffect(() => {
     api
@@ -49,11 +55,17 @@ export function AuthProvider({ children, profileTheme = true }: { children: Reac
     if (!userId) {
       setProfileState(null)
       setStaffRole(null)
+      setNeedsCode(false)
       return
     }
     let current = true
     setProfileState(undefined)
     setStaffRole(undefined)
+    setNeedsCode(undefined)
+    api
+      .needsSignInCode()
+      .then((needs) => current && setNeedsCode(needs))
+      .catch(() => current && setNeedsCode(false))
     api
       .myProfile()
       .then((loaded) => {
@@ -72,7 +84,7 @@ export function AuthProvider({ children, profileTheme = true }: { children: Reac
     }
     // only reload when the person changes, not on every token refresh
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, session === undefined])
+  }, [userId, session === undefined, level])
 
   const setProfile = useCallback((next: Profile) => {
     setProfileState(next)
@@ -87,12 +99,17 @@ export function AuthProvider({ children, profileTheme = true }: { children: Reac
       setProfile,
       signIn: async (email, password) => setSession(await api.signIn(email, password)),
       signUp: (email, password, details) => api.signUp(email, password, details),
+      needsCode,
+      verifyCode: async (code) => {
+        await api.verifySignInCode(code)
+        setLevel((n) => n + 1)
+      },
       signOut: async () => {
         await api.signOut()
         setSession(null)
       },
     }),
-    [session, profile, staffRole, setProfile],
+    [session, profile, staffRole, needsCode, setProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

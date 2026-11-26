@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, TrendUp } from '../components/icons'
+import { Alert, ArrowRight, TrendUp } from '../components/icons'
 import { Notice, Segmented, Skeleton } from '../components/ui'
 import { api } from '../lib/api'
 import { peso } from '../lib/format'
@@ -19,11 +19,21 @@ const method = (m: string) => m.replace('gcash', 'GCash').replace('maya', 'Maya'
 export function DashboardPage() {
   const [days, setDays] = useState<Days>('30')
   const dash = useLoad(() => api.ownerDashboard(Number(days) as 7 | 30 | 90), [days])
+  const twoStep = useLoad(() => api.twoStepStatus(), [])
   const d = dash.data
 
   return (
     <div className="mx-auto max-w-[1400px]">
       <h1 className="text-[30px] leading-tight sm:text-[34px]">Dashboard</h1>
+      {twoStep.data && !twoStep.data.on && (
+        <Link to="/security" className="mt-4 flex items-center justify-between gap-3 rounded-[10px] border border-warn/30 bg-warn-bg px-4 py-3 text-[15px] text-warn">
+          <span className="flex items-center gap-2">
+            <Alert size={18} className="shrink-0" />
+            Turn on two-step sign-in so a stolen password can't open your sales.
+          </span>
+          <ArrowRight size={18} className="shrink-0" />
+        </Link>
+      )}
       {dash.error && (
         <div className="mt-6">
           <Notice tone="bad">{dash.error}</Notice>

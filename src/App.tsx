@@ -6,6 +6,7 @@ import { ContactInbox } from './pages/ContactInbox'
 import { DashboardPage } from './pages/DashboardPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { RequestsPage } from './pages/RequestsPage'
+import { SecurityPage } from './pages/SecurityPage'
 import { StaffPage } from './pages/StaffPage'
 import { TodayPage } from './pages/TodayPage'
 import { SignInPage } from './SignInPage'
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="today" element={<TodayPage />} />
             <Route path="requests" element={<RequestsPage />} />
             <Route path="close" element={<ClosePage />} />
+            <Route path="security" element={<SecurityPage />} />
             {/* owner pages: the database refuses everyone else anyway */}
             <Route path="branches" element={<OwnerOnly page={<BranchesPage />} />} />
             <Route path="staff" element={<OwnerOnly page={<StaffPage />} />} />

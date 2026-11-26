@@ -453,6 +453,58 @@ export function createSupabaseApi(db: SupabaseClient): Api {
       ) as CloseResult
     },
 
+    async needsSignInCode() {
+      const { data } = await db.auth.mfa.getAuthenticatorAssuranceLevel()
+      return data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2'
+    },
+
+    async verifySignInCode(code) {
+      const { data: factors, error } = await db.auth.mfa.listFactors()
+      if (error) throw friendly(error)
+      const factor = factors?.totp.find((item) => item.status === 'verified')
+      if (!factor) throw new Error('No authenticator app is set up for this account.')
+      const result = await db.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.trim() })
+      if (result.error) throw new Error('That code is wrong or too old. Type the newest code from the app.')
+    },
+
+    async twoStepStatus() {
+      const { data, error } = await db.auth.mfa.listFactors()
+      if (error) throw friendly(error)
+      return { on: Boolean(data?.totp.some((item) => item.status === 'verified')) }
+    },
+
+    async startTwoStep() {
+      // clear any half-finished setup first, so a new QR code can be made
+      const { data: factors } = await db.auth.mfa.listFactors()
+      for (const factor of factors?.all ?? []) {
+        if (factor.status !== 'verified') await db.auth.mfa.unenroll({ factorId: factor.id })
+      }
+      const { data, error } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Trimmed staff' })
+      if (error || !data) throw new Error("Couldn't start the setup. Try again.")
+      const svg = data.totp.qr_code
+      return {
+        factorId: data.id,
+        qrCode: svg.startsWith('data:') ? svg : `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+        secret: data.totp.secret,
+      }
+    },
+
+    async confirmTwoStep(factorId, code) {
+      const { error } = await db.auth.mfa.challengeAndVerify({ factorId, code: code.trim() })
+      if (error) throw new Error('That code is wrong or too old. Type the newest code from the app.')
+    },
+
+    async turnOffTwoStep() {
+      const { data: factors, error } = await db.auth.mfa.listFactors()
+      if (error) throw friendly(error)
+      for (const factor of factors?.all ?? []) {
+        const result = await db.auth.mfa.unenroll({ factorId: factor.id })
+        if (result.error) throw new Error("Couldn't turn it off. Sign out, sign in again with your code, and try again.")
+      }
+      // a fresh token that no longer carries the old sign-in level
+      await db.auth.refreshSession()
+    },
+
     async staffList() {
       return check(await db.rpc('staff_list')) as StaffMember[]
     },
