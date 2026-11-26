@@ -27,6 +27,21 @@ export type Barber = {
 }
 
 /** weekday: 0 = Sunday. Times are "HH:MM:SS" in Manila. One row per branch per open day. */
+/** One shift. clock_out null = still on shift. */
+export type Shift = { id: string; clock_in: string; clock_out: string | null }
+
+/** A shift as the owner sees it. */
+export type AttendanceRow = Shift & {
+  staff_id: string
+  full_name: string
+  role: 'desk' | 'barber'
+  branch_id: string | null
+  branch_name: string | null
+  minutes: number | null
+  fixed_at: string | null
+  fix_reason: string | null
+}
+
 /** One working day for a barber. weekday 0 = Sunday; times are "HH:MM" in Manila. */
 export type WorkDay = { weekday: number; starts_at: string; ends_at: string }
 
@@ -263,6 +278,16 @@ export type Api = {
   barberHours(barberId: string): Promise<WorkDay[]>
   /** owner only: replaces the whole week at once */
   setBarberHours(barberId: string, days: WorkDay[]): Promise<void>
+
+  // attendance: barbers and desk clock in and out; the owner reviews
+  /** the caller's shifts touching today plus any open one; null for the owner */
+  myShiftsToday(): Promise<Shift[] | null>
+  clockIn(): Promise<void>
+  clockOut(): Promise<void>
+  /** owner only: every shift that started between two Manila dates (up to 3 months) */
+  attendance(from: string, to: string): Promise<AttendanceRow[]>
+  /** owner only: fix a wrong or forgotten time; clockOut null leaves it open */
+  fixShift(id: string, clockIn: string, clockOut: string | null, reason: string): Promise<void>
 
   // owner: how each branch is doing
   branchStats(days: 7 | 30 | 90): Promise<BranchStats[]>

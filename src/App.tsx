@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from './lib/auth'
+import { AttendancePage } from './pages/AttendancePage'
 import { BranchesPage } from './pages/BranchesPage'
 import { ClosePage } from './pages/ClosePage'
 import { ChairPage } from './pages/ChairPage'
@@ -34,6 +35,7 @@ export default function App() {
             {/* owner pages: the database refuses everyone else anyway */}
             <Route path="branches" element={<OwnerOnly page={<BranchesPage />} />} />
             <Route path="staff" element={<OwnerOnly page={<StaffPage />} />} />
+            <Route path="attendance" element={<OwnerOnly page={<AttendancePage />} />} />
             <Route path="inventory" element={<OwnerOnly page={<InventoryPage />} />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

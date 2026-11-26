@@ -1,5 +1,5 @@
 import type { AuthError, PostgrestError, SupabaseClient } from '@supabase/supabase-js'
-import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, Earnings, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole, WorkDay } from './types'
+import type { Api, AttendanceRow, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, Earnings, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole, Shift, WorkDay } from './types'
 
 // Turns database and sign-in errors into plain sentences.
 // Our own database functions already raise plain messages (code P0001), so
@@ -533,6 +533,26 @@ export function createSupabaseApi(db: SupabaseClient): Api {
 
     async setBarberHours(barberId, days) {
       check(await db.rpc('set_barber_hours', { p_barber: barberId, p_hours: days }))
+    },
+
+    async myShiftsToday() {
+      return check(await db.rpc('my_shifts_today')) as Shift[] | null
+    },
+
+    async clockIn() {
+      check(await db.rpc('clock_in'))
+    },
+
+    async clockOut() {
+      check(await db.rpc('clock_out'))
+    },
+
+    async attendance(from, to) {
+      return check(await db.rpc('attendance', { p_from: from, p_to: to })) as AttendanceRow[]
+    },
+
+    async fixShift(id, clockIn, clockOut, reason) {
+      check(await db.rpc('fix_shift', { p_id: id, p_in: clockIn, p_out: clockOut, p_reason: reason }))
     },
 
     async setStaffActive(id, active) {

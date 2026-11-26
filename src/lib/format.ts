@@ -49,3 +49,10 @@ export function cleanUsername(input: string): string | null {
 export function passwordProblem(password: string): string | null {
   return /^(?=.*[A-Za-z])(?=.*\d).{10,}$/.test(password) ? null : 'Use at least 10 characters, with letters and numbers.'
 }
+
+/** Minutes as "3 h 10 min" (or "25 min"). */
+export function hoursText(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h} h ${m} min` : `${m} min`
+}

@@ -1,5 +1,5 @@
 import { manilaDateOf, manilaToday, manilaWallClock, addDays } from './dates'
-import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, InventoryItem, OpeningHours, OwnerDashboard, Profile, QueueItem, Review, StaffMember, Service, Session, StaffRole, WorkDay } from './types'
+import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, InventoryItem, OpeningHours, OwnerDashboard, Profile, QueueItem, Review, StaffMember, Service, Session, StaffRole, Shift, WorkDay } from './types'
 
 // Sample data for working on the screens without a database.
 // Development only: api.ts never loads this file in a production build.
@@ -761,6 +761,61 @@ export const demoApi: Api = {
     if (days.some((d) => d.ends_at <= d.starts_at)) throw new Error('Each day must end after it starts')
     barberWeeks.set(barberId, days.map((d) => ({ ...d })))
   },
+  async myShiftsToday() {
+    await wait(150)
+    const role = demoRole()
+    if (role !== 'barber' && role !== 'desk') return null
+    const me = sampleMe()
+    const today = manilaToday()
+    return shifts
+      .filter((s) => s.staff_id === me.id && (!s.clock_out || manilaDateOf(s.clock_in) === today || manilaDateOf(s.clock_out) === today))
+      .map(({ id, clock_in, clock_out }) => ({ id, clock_in, clock_out }))
+  },
+  async clockIn() {
+    await wait()
+    const role = demoRole()
+    if (role !== 'barber' && role !== 'desk') throw new Error('Not allowed')
+    const me = sampleMe()
+    if (shifts.some((s) => s.staff_id === me.id && !s.clock_out)) throw new Error('You are already clocked in')
+    shifts.push({ id: crypto.randomUUID(), staff_id: me.id, clock_in: new Date().toISOString(), clock_out: null, fixed_at: null, fix_reason: null })
+  },
+  async clockOut() {
+    await wait()
+    const me = sampleMe()
+    const open = shifts.find((s) => s.staff_id === me.id && !s.clock_out)
+    if (!open) throw new Error('You are not clocked in')
+    open.clock_out = new Date().toISOString()
+  },
+  async attendance(from, to) {
+    await wait()
+    needOwner()
+    if (to < from) throw new Error('Pick a range of up to 3 months')
+    return shifts
+      .filter((s) => manilaDateOf(s.clock_in) >= from && manilaDateOf(s.clock_in) <= to)
+      .sort((a, b) => b.clock_in.localeCompare(a.clock_in))
+      .map((s) => {
+        const member = staffMembers.find((m) => m.id === s.staff_id)!
+        const branchId = member.branch_id
+        return {
+          ...s,
+          full_name: member.full_name,
+          role: member.role as 'desk' | 'barber',
+          branch_id: branchId,
+          branch_name: branches.find((b) => b.id === branchId)?.name ?? null,
+          minutes: s.clock_out ? Math.round((Date.parse(s.clock_out) - Date.parse(s.clock_in)) / 60000) : null,
+        }
+      })
+  },
+  async fixShift(id, clockIn, clockOut, reason) {
+    await wait()
+    needOwner()
+    if (reason.trim().length < 3) throw new Error('Give a reason (3 to 200 characters)')
+    if (Date.parse(clockIn) > Date.now() || (clockOut && Date.parse(clockOut) > Date.now())) throw new Error("Times can't be in the future")
+    if (clockOut && clockOut <= clockIn) throw new Error('Clock-out must be after clock-in')
+    const shift = shifts.find((s) => s.id === id)
+    if (!shift) throw new Error('Shift not found')
+    Object.assign(shift, { clock_in: clockIn, clock_out: clockOut, fixed_at: new Date().toISOString(), fix_reason: reason.trim() })
+  },
   async setStaffPassword(_id, password) {
     await wait(400)
     needOwner()
@@ -946,6 +1001,21 @@ function branchWeek(barberId: string): WorkDay[] {
     .filter((h) => h.branch_id === branchId)
     .map((h) => ({ weekday: h.weekday, starts_at: h.opens_at.slice(0, 5), ends_at: h.closes_at.slice(0, 5) }))
 }
+
+// sample shifts: who the signed-in barber or desk login is in the staff list
+type SampleShift = Shift & { staff_id: string; fixed_at: string | null; fix_reason: string | null }
+function sampleMe() {
+  return staffMembers.find((m) => m.role === demoRole())!
+}
+// a few made-up shifts so the owner's attendance page has something to show
+const shifts: SampleShift[] = (() => {
+  const at = (daysAgo: number, time: string) => manilaWallClock(addDays(manilaToday(), -daysAgo), time).toISOString()
+  return [
+    { id: 'sh1', staff_id: 'st1', clock_in: at(1, '08:52'), clock_out: at(1, '18:05'), fixed_at: null, fix_reason: null },
+    { id: 'sh2', staff_id: 'st2', clock_in: at(1, '09:10'), clock_out: at(1, '19:58'), fixed_at: null, fix_reason: null },
+    { id: 'sh3', staff_id: 'st3', clock_in: at(2, '09:02'), clock_out: null, fixed_at: null, fix_reason: null },
+  ]
+})()
 
 // sample two-step state (a fresh page load signs you out in sample mode anyway)
 const twoStep = { on: false, verified: false }

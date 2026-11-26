@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Outlet } from 'react-router'
-import { Calendar, CheckCircle, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Scissors, Settings, Sun, User, Users, Wallet, X } from './components/icons'
+import { Calendar, CheckCircle, Clock, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Scissors, Settings, Sun, User, Users, Wallet, X } from './components/icons'
 import { LogoMark } from './components/Logo'
+import { ShiftBar } from './components/ShiftBar'
 import { Skeleton } from './components/ui'
 import { isDemo } from './lib/api'
 import { useAuth } from './lib/auth'
@@ -36,6 +37,7 @@ export function StaffLayout() {
     { to: '/', label: 'Dashboard', icon: Grid, end: true },
     { to: '/branches', label: 'Branches', icon: MapPin },
     { to: '/staff', label: 'Staff', icon: User },
+    { to: '/attendance', label: 'Attendance', icon: Clock },
     { to: '/inventory', label: 'Inventory', icon: List },
   ]
   const barber: NavItem[] = [
@@ -111,6 +113,8 @@ export function StaffLayout() {
 
         <main id="main" className="mt-6">
           {isDemo && <p className="mb-4 rounded-full bg-warn-bg px-4 py-1.5 text-center text-[13px] text-warn">Sample data (development only)</p>}
+          {/* barbers and desk clock in and out here; the owner doesn't */}
+          {staffRole !== 'owner' && <ShiftBar />}
           <Outlet />
         </main>
       </div>
