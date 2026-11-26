@@ -1,0 +1,21 @@
+# Dependencies and builds
+node_modules
+dist
+*.local
+
+# Environment files: real keys never go in git
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
