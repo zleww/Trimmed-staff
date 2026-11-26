@@ -148,13 +148,25 @@ function slotsFor(serviceId: string, branchId: string | null, barberId: string |
   return out
 }
 
-// In the sample data, signing in with an email that starts with "owner@" or "desk@"
-// makes you staff, so the shop screens can be tried.
+// In the sample data, signing in with an email that starts with "owner@", "desk@"
+// or "barber@" makes you staff, so the shop screens can be tried.
+// The sample barber login sits in Sample Barber 1's chair.
+const SAMPLE_BARBER = 'b1'
+
 function demoRole(): StaffRole | null {
   // like the database: no shop role until the two-step code is entered
   if (twoStep.on && !twoStep.verified) return null
   const email = session?.email ?? ''
-  return email.startsWith('owner@') ? 'owner' : email.startsWith('desk@') ? 'desk' : null
+  return email.startsWith('owner@') ? 'owner' : email.startsWith('desk@') ? 'desk' : email.startsWith('barber@') ? 'barber' : null
+}
+
+function needStaff() {
+  if (!demoRole()) throw new Error('Not allowed')
+}
+
+// like the database: a barber only sees their own chair and walk-ins nobody has taken yet
+function barberCanSee(row: SampleRow): boolean {
+  return demoRole() !== 'barber' || row.barber_id === SAMPLE_BARBER || (row.barber_id === null && row.status === 'checked_in')
 }
 
 function needDesk() {
@@ -551,11 +563,12 @@ export const demoApi: Api = {
 
   async queueForDay(date) {
     await wait()
-    needDesk()
+    needStaff()
+    const barber = demoRole() === 'barber'
     return queue
-      .filter((q) => manilaDateOf(q.starts_at ?? q.checked_in) === date)
+      .filter((q) => manilaDateOf(q.starts_at ?? q.checked_in) === date && barberCanSee(q))
       .sort((a, b) => (a.starts_at ?? a.checked_in).localeCompare(b.starts_at ?? b.checked_in))
-      .map(({ checked_in: _c, ...q }) => ({ ...q }))
+      .map(({ checked_in: _c, ...q }) => ({ ...q, customer_mobile: barber ? null : q.customer_mobile }))
   },
   async addWalkIn(name, serviceId, barberId) {
     await wait()
@@ -577,7 +590,9 @@ export const demoApi: Api = {
     const row = queueRow(id)
     if (row.status !== 'checked_in') throw new Error('Check the customer in first')
     if (!row.barber_id) {
-      const barber = barbers.find((b) => b.id === barberId)
+      // a barber can only take a walk-in into their own chair
+      if (demoRole() === 'barber' && barberId && barberId !== SAMPLE_BARBER) throw new Error('Not allowed')
+      const barber = barbers.find((b) => b.id === (demoRole() === 'barber' ? SAMPLE_BARBER : barberId))
       if (!barber) throw new Error('Pick a barber')
       row.barber_id = barber.id
       row.barber_name = barber.display_name
@@ -587,12 +602,14 @@ export const demoApi: Api = {
   },
   async markNoShow(id) {
     await wait(150)
+    needDesk()
     const row = queueRow(id)
     if (row.status !== 'booked') throw new Error('Only a booked appointment can be a no-show')
     row.status = 'no_show'
   },
   async cancelAppointment(id, reason) {
     await wait(150)
+    needDesk()
     const row = queueRow(id)
     if (!['booked', 'checked_in'].includes(row.status)) throw new Error('This appointment can no longer be cancelled')
     if (reason.trim().length < 3) throw new Error('Give a reason')
@@ -600,12 +617,12 @@ export const demoApi: Api = {
   },
   async listProducts() {
     await wait(150)
-    needDesk()
+    needStaff()
     return products.filter((p) => p.active).map(({ id, name, price_centavos, stock_qty }) => ({ id, name, price_centavos, stock_qty }))
   },
   async recordSale(sale) {
     await wait()
-    needDesk()
+    needStaff()
     if (dayClosed) throw new Error('Today is already closed')
     if (sale.items.length === 0) throw new Error('Add at least one service or product')
     let total = 0
@@ -628,7 +645,32 @@ export const demoApi: Api = {
     if (paid !== total + tips) throw new Error(`Payments must add up to ₱${(total + tips) / 100}`)
     for (const item of sale.items) if ('product_id' in item) products.find((p) => p.id === item.product_id)!.stock_qty -= item.qty
     if (sale.appointmentId) queueRow(sale.appointmentId).status = 'done'
+    if (demoRole() === 'barber') {
+      for (const item of sale.items) {
+        if ('service_id' in item) {
+          earnings.services_count += 1
+          earnings.services_centavos += services.find((s) => s.id === item.service_id)?.price_centavos ?? 0
+        } else {
+          earnings.products_centavos += (products.find((p) => p.id === item.product_id)?.price_centavos ?? 0) * item.qty
+        }
+      }
+      earnings.tips_centavos += tips
+    }
     return { total_centavos: total, tips_centavos: tips }
+  },
+  async myEarnings(from, to) {
+    await wait()
+    if (demoRole() !== 'barber') throw new Error('Not allowed')
+    if (to < from || (Date.parse(to) - Date.parse(from)) / 86_400_000 > 92) throw new Error('Pick a range of up to 3 months')
+    // made-up numbers that grow with the range, plus what you rang up in this sample session
+    const days = (Date.parse(to) - Date.parse(from)) / 86_400_000
+    const scale = Math.round(days)
+    return {
+      services_count: earnings.services_count + scale * 6,
+      services_centavos: earnings.services_centavos + scale * 180_000,
+      products_centavos: earnings.products_centavos + scale * 25_000,
+      tips_centavos: earnings.tips_centavos + scale * 12_000,
+    }
   },
   async isDayClosed() {
     await wait(100)
@@ -874,11 +916,15 @@ const queue: SampleRow[] = (() => {
 })()
 
 function queueRow(id: string): SampleRow {
-  needDesk()
+  needStaff()
   const row = queue.find((q) => q.id === id)
   if (!row) throw new Error('Appointment not found')
+  if (!barberCanSee(row)) throw new Error('Not allowed')
   return row
 }
+
+// the sample barber's sales this session (today), added on top of the made-up numbers
+const earnings = { services_count: 0, services_centavos: 0, products_centavos: 0, tips_centavos: 0 }
 
 // sample two-step state (a fresh page load signs you out in sample mode anyway)
 const twoStep = { on: false, verified: false }

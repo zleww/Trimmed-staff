@@ -236,6 +236,8 @@ export type Api = {
   /** prices are looked up by the database; we only send what was sold */
   recordSale(sale: SaleInput): Promise<{ total_centavos: number; tips_centavos: number }>
   isDayClosed(date: string): Promise<boolean>
+  /** barber only: their own chair's numbers for Manila dates from..to (up to 3 months) */
+  myEarnings(from: string, to: string): Promise<Earnings>
   /** blind count: the desk types what it counted; only the owner gets the differences back */
   closeDay(count: DayCount): Promise<CloseResult>
 
@@ -314,6 +316,9 @@ export type SaleInput = {
   payments: { method: PayMethod; amount_centavos: number; reference?: string }[]
   tips: { barber_id: string; amount_centavos: number }[]
 }
+
+/** A barber's own numbers. Never the shop's totals. */
+export type Earnings = { services_count: number; services_centavos: number; products_centavos: number; tips_centavos: number }
 
 export type DayCount = { cash_centavos: number; gcash_centavos: number; maya_centavos: number; note: string }
 

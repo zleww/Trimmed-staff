@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Outlet } from 'react-router'
-import { Calendar, CheckCircle, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Settings, Sun, User, Users, X } from './components/icons'
+import { Calendar, CheckCircle, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Scissors, Settings, Sun, User, Users, Wallet, X } from './components/icons'
 import { LogoMark } from './components/Logo'
-import { Button, Skeleton } from './components/ui'
+import { Skeleton } from './components/ui'
 import { isDemo } from './lib/api'
 import { useAuth } from './lib/auth'
 import { initials } from './lib/format'
@@ -25,18 +25,6 @@ export function StaffLayout() {
 
   if (session === null || staffRole === null || needsCode) return <Navigate to="/signin" replace />
   if (session === undefined || staffRole === undefined) return <Skeleton className="m-6 h-64" />
-  if (staffRole === 'barber') {
-    return (
-      <main className="mx-auto max-w-sm px-4 py-20 text-center">
-        <h1 className="text-[28px]">Barber screens are next</h1>
-        <p className="mt-2 text-ink-2">Your queue and earnings will show here soon.</p>
-        <Button variant="secondary" className="mt-6 h-12 w-full" onClick={() => void signOut()}>
-          Sign out
-        </Button>
-      </main>
-    )
-  }
-
   // grouped so the panel scans: the day's work first, then the owner's tools
   const desk: NavItem[] = [
     { to: '/today', label: 'Today', icon: Users },
@@ -50,13 +38,23 @@ export function StaffLayout() {
     { to: '/staff', label: 'Staff', icon: User },
     { to: '/inventory', label: 'Inventory', icon: List },
   ]
-  const groups = staffRole === 'owner' ? [{ title: 'Owner', items: owner }, { title: 'Front desk', items: desk }] : [{ title: 'Front desk', items: desk }]
+  const barber: NavItem[] = [
+    { to: '/chair', label: 'My chair', icon: Scissors },
+    { to: '/earnings', label: 'Earnings', icon: Wallet },
+  ]
+  const groups =
+    staffRole === 'owner'
+      ? [{ title: 'Owner', items: owner }, { title: 'Front desk', items: desk }]
+      : staffRole === 'barber'
+        ? [{ title: 'Barber', items: barber }]
+        : [{ title: 'Front desk', items: desk }]
+  const security: NavItem = { to: '/security', label: 'Security', icon: Settings }
   const all = groups.flatMap((g) => g.items)
-  // phones: four tabs; the rest sit under More
-  const tabs = all.slice(0, 3)
-  const more = [...all.slice(tabs.length), { to: '/security', label: 'Security', icon: Settings }]
+  // phones: up to four tabs; when there are more pages, three tabs + More
+  const tabs = all.length + 1 <= 4 ? [...all, security] : all.slice(0, 3)
+  const more = all.length + 1 <= 4 ? [] : [...all.slice(tabs.length), security]
   const leave = () => void signOut()
-  const role = staffRole === 'owner' ? 'Owner' : 'Front desk'
+  const role = staffRole === 'owner' ? 'Owner' : staffRole === 'barber' ? 'Barber' : 'Front desk'
   const name = profile?.full_name ?? role
 
   return (
@@ -168,16 +166,28 @@ export function StaffLayout() {
   )
 }
 
-/** The home page: the owner gets the dashboard, the desk goes straight to today's list. */
+/** The home page: the owner gets the dashboard, the desk today's list, a barber their chair. */
 export function StaffHome({ owner }: { owner: ReactNode }) {
   const { staffRole } = useAuth()
-  return staffRole === 'owner' ? owner : <Navigate to="/today" replace />
+  return staffRole === 'owner' ? owner : <Navigate to={staffRole === 'barber' ? '/chair' : '/today'} replace />
 }
 
-/** Owner pages: anyone else goes back to today's list. */
+/** Owner pages: anyone else goes back to their home. */
 export function OwnerOnly({ page }: { page: ReactNode }) {
   const { staffRole } = useAuth()
-  return staffRole === 'owner' ? page : <Navigate to="/today" replace />
+  return staffRole === 'owner' ? page : <Navigate to="/" replace />
+}
+
+/** Front desk pages (owner and desk): a barber goes back to their chair. */
+export function DeskOnly({ page }: { page: ReactNode }) {
+  const { staffRole } = useAuth()
+  return staffRole === 'barber' ? <Navigate to="/chair" replace /> : page
+}
+
+/** Barber pages: owner and desk have no chair of their own. */
+export function BarberOnly({ page }: { page: ReactNode }) {
+  const { staffRole } = useAuth()
+  return staffRole === 'barber' ? page : <Navigate to="/" replace />
 }
 
 // the date at the top left, worked out once when the screen opens

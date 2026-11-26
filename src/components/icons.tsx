@@ -252,3 +252,11 @@ export const TrendUp = (p: IconProps) => (
     <path d="M15 7h5v5" />
   </Icon>
 )
+
+export const Wallet = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 7a2 2 0 0 1 2-2h12v4" />
+    <path d="M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2Z" />
+    <path d="M16 14h.01" />
+  </Icon>
+)

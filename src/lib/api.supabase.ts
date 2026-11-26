@@ -1,5 +1,5 @@
 import type { AuthError, PostgrestError, SupabaseClient } from '@supabase/supabase-js'
-import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole } from './types'
+import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, Earnings, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole } from './types'
 
 // Turns database and sign-in errors into plain sentences.
 // Our own database functions already raise plain messages (code P0001), so
@@ -436,6 +436,10 @@ export function createSupabaseApi(db: SupabaseClient): Api {
           p_tips: sale.tips,
         }),
       ) as { total_centavos: number; tips_centavos: number }
+    },
+
+    async myEarnings(from, to) {
+      return check(await db.rpc('my_earnings', { p_from: from, p_to: to })) as Earnings
     },
 
     async isDayClosed(date) {

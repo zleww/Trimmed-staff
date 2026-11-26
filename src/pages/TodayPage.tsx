@@ -198,7 +198,7 @@ export function TodayPage() {
   )
 }
 
-function Row({ row, children }: { row: QueueItem; children?: ReactNode }) {
+export function Row({ row, children }: { row: QueueItem; children?: ReactNode }) {
   const status = look[row.status]
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[14px] border border-line bg-card px-4 py-3">
@@ -361,7 +361,7 @@ function CancelDialog({ row, onClose, onDone }: { row: QueueItem; onClose: () =>
 
 // The bill: the haircut, any pomade, an optional tip, and how they paid.
 // We only send what was sold; the database looks up every price again.
-function SaleDialog({ row, onClose, onDone }: { row: QueueItem; onClose: () => void; onDone: (text: string) => void }) {
+export function SaleDialog({ row, onClose, onDone }: { row: QueueItem; onClose: () => void; onDone: (text: string) => void }) {
   const products = useLoad(() => api.listProducts(), [])
   const [extra, setExtra] = useState<{ product: Product; qty: number }[]>([])
   const [pick, setPick] = useState('')
