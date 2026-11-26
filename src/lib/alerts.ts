@@ -3,11 +3,12 @@ import { api } from './api'
 import { formatTime, manilaDateOf, manilaToday } from './dates'
 import type { StaffRole } from './types'
 
-// In-app alerts while the staff app is open (a tab or an installed screen):
+// Alerts while the staff app is open (a tab, even in the background, or an installed screen):
 // - owner and desk: booking requests waiting for an answer
 // - barber: bookings confirmed for their chair since they last looked
-// Shown as a number on the menu, in the tab title, and as a pop-up if allowed.
-// Nothing is sent when the app is closed: that would need web push (later).
+// Each new one shows a banner on screen, plays a short chime, and (if allowed)
+// a system pop-up. The menu shows a number and so does the browser tab title.
+// Nothing arrives when the app is fully closed: that would need web push (later).
 
 const POLL_MS = 30_000
 const SEEN_EVENT = 'trimmed-bookings-seen'
@@ -41,23 +42,87 @@ export function popupsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window
 }
 
-function popup(title: string, body: string) {
+// Android Chrome refuses `new Notification(...)`; it only shows pop-ups from a
+// service worker. public/sw.js does nothing else (no caching).
+let worker: Promise<ServiceWorkerRegistration | null> | null = null
+function alertWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!worker) {
+    worker =
+      'serviceWorker' in navigator
+        ? navigator.serviceWorker
+            .register('/sw.js')
+            .then(() => navigator.serviceWorker.ready)
+            .catch(() => null)
+        : Promise.resolve(null)
+  }
+  return worker
+}
+
+/** Ask for system pop-ups. Also gets the sound ready (browsers need a tap first). */
+export async function askForPopups(): Promise<NotificationPermission> {
+  unlockSound()
+  void alertWorker()
+  return Notification.requestPermission()
+}
+
+async function popup(title: string, body: string, url: string) {
   if (!popupsSupported() || Notification.permission !== 'granted') return
+  const options = { body, icon: '/favicon-32.png', badge: '/favicon-32.png', tag: `${title}:${body}`, data: { url } }
   try {
-    new Notification(title, { body, icon: '/favicon-32.png', tag: title + body })
+    const registration = await alertWorker()
+    if (registration) return await registration.showNotification(title, options)
+    new Notification(title, options)
   } catch {
-    // some phones only allow pop-ups from an installed app
+    // iPhone: pop-ups only work once the app is added to the home screen
+  }
+}
+
+// A short two-note chime made in the browser (no sound file to download).
+let audio: AudioContext | null = null
+function unlockSound() {
+  try {
+    audio ??= new AudioContext()
+    if (audio.state === 'suspended') void audio.resume()
+  } catch {
+    audio = null
+  }
+}
+function chime() {
+  if (!audio || audio.state !== 'running') return
+  const start = audio.currentTime
+  for (const [i, freq] of [880, 1320].entries()) {
+    const osc = audio.createOscillator()
+    const gain = audio.createGain()
+    osc.frequency.value = freq
+    gain.gain.setValueAtTime(0.0001, start + i * 0.18)
+    gain.gain.exponentialRampToValueAtTime(0.25, start + i * 0.18 + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + i * 0.18 + 0.35)
+    osc.connect(gain).connect(audio.destination)
+    osc.start(start + i * 0.18)
+    osc.stop(start + i * 0.18 + 0.4)
   }
 }
 
 const when = (iso: string) => (manilaDateOf(iso) === manilaToday() ? `today ${formatTime(iso)}` : `${manilaDateOf(iso).slice(5)} ${formatTime(iso)}`)
 
+/** The banner the layout shows for the newest alert. */
+export type AlertBanner = { id: number; title: string; body: string; to: string }
+
 /** How many things need this person's attention. Polls while the app is open. */
 export function useAlerts(role: StaffRole | null | undefined, userId: string | undefined) {
   const [requests, setRequests] = useState(0)
   const [bookings, setBookings] = useState(0)
-  // ids already announced, so each one pops up once; null until the first check
+  const [banner, setBanner] = useState<AlertBanner | null>(null)
+  // ids already announced, so each one alerts once; null until the first check
   const known = useRef<Set<string> | null>(null)
+
+  const announce = useCallback((title: string, body: string, to: string, loud: boolean) => {
+    setBanner({ id: Date.now(), title, body, to })
+    if (loud) {
+      chime()
+      void popup(title, body, to)
+    }
+  }, [])
 
   const check = useCallback(async () => {
     if (!role || !userId) return
@@ -65,13 +130,14 @@ export function useAlerts(role: StaffRole | null | undefined, userId: string | u
       if (role === 'owner' || role === 'desk') {
         const list = await api.bookingRequests()
         setRequests(list.length)
-        const fresh = list.filter((r) => !known.current?.has(r.id))
-        // the first check only learns what's there; later ones announce what's new
         if (known.current) {
-          for (const r of fresh) {
+          for (const r of list.filter((x) => !known.current!.has(x.id))) {
             const what = r.kind === 'cancel' ? 'Cancel request' : r.kind === 'move' ? 'New time asked' : 'New booking request'
-            popup(what, `${r.customer}, ${r.service}, ${when(r.starts_at)}${r.barber ? ` with ${r.barber}` : ''}`)
+            announce(what, `${r.customer}, ${r.service}, ${when(r.starts_at)}${r.barber ? ` with ${r.barber}` : ''}`, '/requests', true)
           }
+        } else if (list.length > 0) {
+          // opening the app with requests already waiting: a quiet reminder
+          announce(list.length === 1 ? '1 request is waiting' : `${list.length} requests are waiting`, 'Confirm or decline them so customers know.', '/requests', false)
         }
         known.current = new Set(list.map((r) => r.id))
       } else if (role === 'barber') {
@@ -80,18 +146,24 @@ export function useAlerts(role: StaffRole | null | undefined, userId: string | u
         setBookings(list.length)
         if (known.current) {
           for (const b of list.filter((x) => !known.current!.has(x.id))) {
-            popup('New booking with you', `${b.customer_name}, ${b.service_name}, ${when(b.starts_at)}${b.inspo ? ' (has inspo)' : ''}`)
+            announce('New booking with you', `${b.customer_name}, ${b.service_name}, ${when(b.starts_at)}${b.inspo ? ' (has inspo)' : ''}`, '/bookings', true)
           }
+        } else if (list.length > 0) {
+          announce(list.length === 1 ? '1 new booking with you' : `${list.length} new bookings with you`, 'Open Bookings to see who and their inspo.', '/bookings', false)
         }
         known.current = new Set([...(known.current ?? []), ...list.map((b) => b.id)])
       }
     } catch {
       // offline or signed out: try again next time
     }
-  }, [role, userId])
+  }, [role, userId, announce])
 
   useEffect(() => {
     known.current = null
+    // the pop-up helper is ready early when pop-ups were allowed before
+    if (popupsSupported() && Notification.permission === 'granted') void alertWorker()
+    // the first tap anywhere lets the chime play later
+    window.addEventListener('pointerdown', unlockSound, { once: true })
     // oxlint-disable-next-line react/set-state-in-effect -- the state is set after the network answer, not right away
     void check()
     const timer = setInterval(() => void check(), POLL_MS)
@@ -100,6 +172,7 @@ export function useAlerts(role: StaffRole | null | undefined, userId: string | u
     window.addEventListener('focus', again)
     return () => {
       clearInterval(timer)
+      window.removeEventListener('pointerdown', unlockSound)
       window.removeEventListener(SEEN_EVENT, again)
       window.removeEventListener('focus', again)
     }
@@ -111,5 +184,5 @@ export function useAlerts(role: StaffRole | null | undefined, userId: string | u
     document.title = total > 0 ? `(${total}) Trimmed staff` : 'Trimmed staff'
   }, [total])
 
-  return { requests, bookings }
+  return { requests, bookings, banner, dismiss: () => setBanner(null) }
 }

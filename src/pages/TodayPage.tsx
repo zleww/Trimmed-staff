@@ -198,7 +198,7 @@ export function TodayPage() {
   )
 }
 
-export function Row({ row, children }: { row: QueueItem; children?: ReactNode }) {
+export function Row({ row, children, below }: { row: QueueItem; children?: ReactNode; below?: ReactNode }) {
   const status = look[row.status]
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[14px] border border-line bg-card px-4 py-3">
@@ -220,6 +220,7 @@ export function Row({ row, children }: { row: QueueItem; children?: ReactNode })
         )}
         {children}
       </span>
+      {below && <div className="w-full">{below}</div>}
     </li>
   )
 }

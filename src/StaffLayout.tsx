@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, Navigate, NavLink, Outlet } from 'react-router'
+import { Link, Navigate, NavLink, Outlet, useNavigate } from 'react-router'
 import { Calendar, CheckCircle, Clock, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Scissors, Settings, Sun, User, Users, Wallet, X } from './components/icons'
 import { LogoMark } from './components/Logo'
 import { ShiftBar } from './components/ShiftBar'
@@ -18,6 +18,7 @@ export function StaffLayout() {
   const { session, profile, staffRole, needsCode, signOut } = useAuth()
   const [sheet, setSheet] = useState(false)
   const alerts = useAlerts(staffRole, session?.userId)
+  const navigate = useNavigate()
   // Esc closes the More sheet
   useEffect(() => {
     if (!sheet) return
@@ -121,6 +122,36 @@ export function StaffLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* the newest alert: a new request (desk) or a new booking (barber) */}
+      {alerts.banner && (
+        <div
+          key={alerts.banner.id}
+          role="status"
+          aria-live="polite"
+          className="rise fixed inset-x-3 top-3 z-40 mx-auto flex max-w-md items-start gap-3 rounded-[14px] border border-gold/40 bg-card p-4 shadow-2xl md:top-6"
+        >
+          <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-gold text-bg">
+            <Calendar size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-medium">{alerts.banner.title}</span>
+            <span className="block text-[14px] text-ink-2">{alerts.banner.body}</span>
+            <button
+              onClick={() => {
+                navigate(alerts.banner!.to)
+                alerts.dismiss()
+              }}
+              className="mt-2 min-h-10 text-[14px] font-medium text-gold underline-offset-4 hover:underline"
+            >
+              Open
+            </button>
+          </span>
+          <button onClick={alerts.dismiss} aria-label="Close" className="grid size-10 shrink-0 place-items-center text-ink-2 hover:text-ink">
+            <X size={18} />
+          </button>
+        </div>
+      )}
 
       {/* tab bar (phone) */}
       <nav aria-label="Staff" className="fixed inset-x-3 bottom-3 z-20 flex rounded-[14px] border border-line bg-card p-1.5 md:hidden">

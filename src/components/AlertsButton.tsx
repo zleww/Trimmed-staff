@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { popupsSupported } from '../lib/alerts'
+import { askForPopups, popupsSupported } from '../lib/alerts'
 import { Alert } from './icons'
 import { Button } from './ui'
 
@@ -11,7 +11,7 @@ export function AlertsButton() {
     return popupsSupported() ? <p className="text-[13px] text-ink-3">Pop-up alerts are blocked in this browser's site settings.</p> : null
   }
   return (
-    <Button variant="ghost" className="h-11" onClick={async () => setState(await Notification.requestPermission())}>
+    <Button variant="ghost" className="h-11" onClick={async () => setState(await askForPopups())}>
       <Alert size={16} />
       Turn on pop-up alerts
     </Button>

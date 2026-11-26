@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { BookingInspo } from '../components/Inspo'
 import { Button, Notice, Skeleton } from '../components/ui'
 import { api } from '../lib/api'
 import { manilaToday } from '../lib/dates'
@@ -112,7 +113,12 @@ export function ChairPage() {
                 </h2>
                 <ul className="space-y-2">
                   {group.rows.map((row) => (
-                    <Row key={row.id} row={row}>
+                    <Row
+                      key={row.id}
+                      row={row}
+                      // the customer's photos or videos, until the cut is done (shows nothing when there are none)
+                      below={row.source !== 'walk_in' && row.status !== 'done' ? <BookingInspo bookingId={row.id} editable={false} title="Inspo from the customer" /> : null}
+                    >
                       {actions(row)}
                     </Row>
                   ))}

@@ -1037,6 +1037,9 @@ const queue: SampleRow[] = (() => {
   ]
 })()
 
+// sample customer D (booked today with the sample barber) also sent an inspo picture
+inspo.set('inspo-today', { ...inspo.get('inspo-sample')!, id: 'inspo-today', bookingId: queue[3].id })
+
 function queueRow(id: string): SampleRow {
   needStaff()
   const row = queue.find((q) => q.id === id)
