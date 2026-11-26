@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Ban, Calendar, CheckCircle, Clock, Scissors, User } from '../components/icons'
+import { AlertsButton } from '../components/AlertsButton'
+import { refreshAlerts } from '../lib/alerts'
 import { BookingInspo } from '../components/Inspo'
 import { Button, Dialog, Field, Glass, Notice, Skeleton } from '../components/ui'
 import { api } from '../lib/api'
@@ -32,7 +34,7 @@ export function RequestsPage() {
   // new requests come in while the desk works: check again every minute
   const { reload } = requests
   useEffect(() => {
-    const timer = setInterval(reload, 60_000)
+    const timer = setInterval(reload, 30_000)
     return () => clearInterval(timer)
   }, [reload])
 
@@ -56,6 +58,7 @@ export function RequestsPage() {
     } finally {
       setBusyId(null)
       reload()
+      refreshAlerts()
     }
   }
 
@@ -82,6 +85,7 @@ export function RequestsPage() {
     } finally {
       setBusyId(null)
       reload()
+      refreshAlerts()
     }
   }
 
@@ -92,9 +96,12 @@ export function RequestsPage() {
       <p className="text-[12px] font-semibold tracking-[0.2em] text-accent-ink uppercase">Shop</p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-[34px] leading-tight tracking-tight sm:text-[40px]">Booking requests</h1>
-        <Button variant="ghost" onClick={reload} loading={requests.loading && Boolean(requests.data)}>
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <AlertsButton />
+          <Button variant="ghost" onClick={reload} loading={requests.loading && Boolean(requests.data)}>
+            Refresh
+          </Button>
+        </div>
       </div>
       <p className="mt-2 text-[15px] text-ink-2">
         {list.length === 0 ? 'Nothing waiting.' : `${list.length} waiting, soonest first.`} Each time stays held until you answer.

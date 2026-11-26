@@ -207,6 +207,7 @@ export function Row({ row, children }: { row: QueueItem; children?: ReactNode })
         <span className="block truncate text-[16px]">{row.customer_name}</span>
         <span className="block truncate text-[13px] text-ink-3">
           {row.service_name} · {row.barber_name ?? 'Any barber'}
+          {row.source !== 'walk_in' && <span className="num tracking-wider"> · {row.code}</span>}
         </span>
       </span>
       {/* on phones the status and buttons share the second line, so the name gets the full width */}

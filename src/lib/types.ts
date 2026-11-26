@@ -254,6 +254,8 @@ export type Api = {
   /** prices are looked up by the database; we only send what was sold */
   recordSale(sale: SaleInput): Promise<{ total_centavos: number; tips_centavos: number }>
   isDayClosed(date: string): Promise<boolean>
+  /** barber only: their own coming bookings and waiting requests, today and the next days */
+  barberSchedule(days: number): Promise<ScheduleItem[]>
   /** barber only: their own chair's numbers for Manila dates from..to (up to 3 months) */
   myEarnings(from: string, to: string): Promise<Earnings>
   /** blind count: the desk types what it counted; only the owner gets the differences back */
@@ -347,6 +349,22 @@ export type SaleInput = {
   items: ({ service_id: string; barber_id: string } | { product_id: string; qty: number })[]
   payments: { method: PayMethod; amount_centavos: number; reference?: string }[]
   tips: { barber_id: string; amount_centavos: number }[]
+}
+
+/** A booking in a barber's own schedule. No phone numbers. */
+export type ScheduleItem = {
+  id: string
+  code: string
+  starts_at: string
+  ends_at: string
+  status: 'requested' | 'booked' | 'checked_in' | 'in_chair'
+  source: 'online' | 'desk' | 'walk_in'
+  service_name: string
+  customer_name: string
+  branch_name: string | null
+  confirmed_at: string | null
+  created_at: string
+  inspo: number
 }
 
 /** A barber's own numbers. Never the shop's totals. */

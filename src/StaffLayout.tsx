@@ -3,6 +3,7 @@ import { Link, Navigate, NavLink, Outlet } from 'react-router'
 import { Calendar, CheckCircle, Clock, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Scissors, Settings, Sun, User, Users, Wallet, X } from './components/icons'
 import { LogoMark } from './components/Logo'
 import { ShiftBar } from './components/ShiftBar'
+import { useAlerts } from './lib/alerts'
 import { Skeleton } from './components/ui'
 import { isDemo } from './lib/api'
 import { useAuth } from './lib/auth'
@@ -16,6 +17,7 @@ const today = new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long',
 export function StaffLayout() {
   const { session, profile, staffRole, needsCode, signOut } = useAuth()
   const [sheet, setSheet] = useState(false)
+  const alerts = useAlerts(staffRole, session?.userId)
   // Esc closes the More sheet
   useEffect(() => {
     if (!sheet) return
@@ -29,7 +31,7 @@ export function StaffLayout() {
   // grouped so the panel scans: the day's work first, then the owner's tools
   const desk: NavItem[] = [
     { to: '/today', label: 'Today', icon: Users },
-    { to: '/requests', label: 'Requests', icon: Calendar },
+    { to: '/requests', label: 'Requests', icon: Calendar, badge: alerts.requests },
     { to: '/messages', label: 'Messages', icon: Mail },
     { to: '/close', label: 'Close day', icon: CheckCircle },
   ]
@@ -42,6 +44,7 @@ export function StaffLayout() {
   ]
   const barber: NavItem[] = [
     { to: '/chair', label: 'My chair', icon: Scissors },
+    { to: '/bookings', label: 'Bookings', icon: Calendar, badge: alerts.bookings },
     { to: '/earnings', label: 'Earnings', icon: Wallet },
   ]
   const groups =
@@ -121,7 +124,7 @@ export function StaffLayout() {
 
       {/* tab bar (phone) */}
       <nav aria-label="Staff" className="fixed inset-x-3 bottom-3 z-20 flex rounded-[14px] border border-line bg-card p-1.5 md:hidden">
-        {tabs.map(({ to, label, icon: Icon, end }) => (
+        {tabs.map(({ to, label, icon: Icon, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -130,7 +133,10 @@ export function StaffLayout() {
               `flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-[10px] text-[12px] ${isActive ? 'bg-raised text-ink' : 'text-ink-3'}`
             }
           >
-            <Icon size={18} />
+            <span className="relative">
+              <Icon size={18} />
+              <Badge count={badge} className="absolute -top-2 -right-3" />
+            </span>
             {label}
           </NavLink>
         ))}
@@ -140,7 +146,10 @@ export function StaffLayout() {
             aria-expanded={sheet}
             className="flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-[10px] text-[12px] text-ink-3"
           >
-            <Menu size={18} />
+            <span className="relative">
+              <Menu size={18} />
+              <Badge count={more.reduce((sum, m) => sum + (m.badge ?? 0), 0)} className="absolute -top-2 -right-3" />
+            </span>
             More
           </button>
         )}
@@ -218,10 +227,10 @@ function ThemeToggle() {
   )
 }
 
-type NavItem = { to: string; label: string; icon: typeof Grid; end?: boolean }
+type NavItem = { to: string; label: string; icon: typeof Grid; end?: boolean; badge?: number }
 
 function PanelLink({ item, onPick }: { item: NavItem; onPick?: () => void }) {
-  const { to, label, icon: Icon, end } = item
+  const { to, label, icon: Icon, end, badge } = item
   return (
     <NavLink
       to={to}
@@ -239,8 +248,19 @@ function PanelLink({ item, onPick }: { item: NavItem; onPick?: () => void }) {
           {isActive && <span aria-hidden="true" className="absolute -left-3 h-5 w-[3px] rounded-r bg-gold" />}
           <Icon size={19} />
           {label}
+          <Badge count={badge} className="ml-auto" />
         </>
       )}
     </NavLink>
+  )
+}
+
+// a small gold number on a menu item; nothing when it's zero
+function Badge({ count, className = '' }: { count?: number; className?: string }) {
+  if (!count) return null
+  return (
+    <span aria-label={`${count} new`} className={`num grid h-5 min-w-5 place-items-center rounded-full bg-gold px-1.5 text-[11px] font-semibold text-bg ${className}`}>
+      {count > 9 ? '9+' : count}
+    </span>
   )
 }

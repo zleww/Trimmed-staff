@@ -46,7 +46,26 @@ const rules: BookingRules = { slot_step_minutes: 15, booking_days_ahead: 14, min
 
 let session: Session | null = null
 let profile: Profile | null = null
-const bookings: Booking[] = []
+// one waiting request, so the desk's Requests badge can be tried in the sample data
+const bookings: Booking[] = [
+  (() => {
+    const start = manilaWallClock(addDays(manilaToday(), 1), '11:00:00')
+    return {
+      id: 'sample-request',
+      code: 'SAMPLE02',
+      starts_at: start.toISOString(),
+      ends_at: new Date(start.getTime() + services[0].duration_minutes * 60_000).toISOString(),
+      status: 'requested' as const,
+      service_id: services[0].id,
+      service: services[0].name,
+      branch_id: 'br1',
+      branch: 'Sample Branch One',
+      barber_id: 'b2',
+      barber: 'Sample Barber 2',
+      price_centavos: services[0].price_centavos,
+    }
+  })(),
+]
 // a request for a new time -> the confirmed booking it would replace
 const replaces = new Map<string, string>()
 
@@ -62,6 +81,17 @@ function withChanges(b: Booking): Booking {
 }
 const takenUsernames = new Set(['admin', 'owner', 'staff', 'desk', 'barber', 'trimmed', 'sample.fan'])
 const inspo = new Map<string, Inspo & { bookingId: string }>()
+// one sample inspo picture on the sample barber's booking tomorrow
+inspo.set('inspo-sample', {
+  id: 'inspo-sample',
+  kind: 'image',
+  bookingId: 'ahead1',
+  url:
+    'data:image/svg+xml;utf8,' +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="#2a2620"/><circle cx="60" cy="52" r="26" fill="#d6a54e"/><rect x="30" y="82" width="60" height="30" rx="14" fill="#d6a54e"/></svg>',
+    ),
+})
 
 // made-up reviews so the barber page has something to show
 const reviews: (Review & { barberId: string })[] = [
@@ -658,6 +688,31 @@ export const demoApi: Api = {
     }
     return { total_centavos: total, tips_centavos: tips }
   },
+  async barberSchedule(days) {
+    await wait()
+    if (demoRole() !== 'barber') throw new Error('Not allowed')
+    const last = addDays(manilaToday(), days)
+    return queue
+      .filter((q) => q.barber_id === SAMPLE_BARBER && q.starts_at && ['booked', 'checked_in', 'in_chair'].includes(q.status) && Date.parse(q.ends_at!) > Date.now())
+      .concat(sampleAhead)
+      .filter((q) => manilaDateOf(q.starts_at!) < last)
+      .sort((a, b) => a.starts_at!.localeCompare(b.starts_at!))
+      .map((q) => ({
+        id: q.id,
+        code: q.code,
+        starts_at: q.starts_at!,
+        ends_at: q.ends_at!,
+        status: q.status as 'requested' | 'booked' | 'checked_in' | 'in_chair',
+        source: q.source,
+        service_name: q.service_name,
+        customer_name: q.customer_name,
+        branch_name: 'Sample Branch One',
+        // the made-up ones count as just confirmed, so the "new" badge can be tried
+        confirmed_at: q.status === 'requested' ? null : q.id.startsWith('ahead') ? SAMPLE_CONFIRMED : manilaWallClock(manilaToday(), '07:00').toISOString(),
+        created_at: manilaWallClock(manilaToday(), '07:00').toISOString(),
+        inspo: q.id === 'ahead1' ? 1 : 0,
+      }))
+  },
   async myEarnings(from, to) {
     await wait()
     if (demoRole() !== 'barber') throw new Error('Not allowed')
@@ -989,6 +1044,18 @@ function queueRow(id: string): SampleRow {
   if (!barberCanSee(row)) throw new Error('Not allowed')
   return row
 }
+
+// when the sample's "just confirmed" booking was confirmed: the moment the page loaded
+const SAMPLE_CONFIRMED = new Date().toISOString()
+
+// two bookings on coming days for the sample barber (not in today's queue)
+const sampleAhead: SampleRow[] = (() => {
+  const at = (days: number, time: string) => manilaWallClock(addDays(manilaToday(), days), time)
+  return [
+    { ...sampleRow('Sample Customer G', services[1], barbers[0], at(1, '10:00'), 'booked', 'online'), id: 'ahead1' },
+    { ...sampleRow('Sample Customer H', services[0], barbers[0], at(2, '15:30'), 'requested', 'online'), id: 'ahead2' },
+  ]
+})()
 
 // the sample barber's sales this session (today), added on top of the made-up numbers
 const earnings = { services_count: 0, services_centavos: 0, products_centavos: 0, tips_centavos: 0 }

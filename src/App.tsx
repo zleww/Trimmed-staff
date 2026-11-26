@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from './lib/auth'
 import { AttendancePage } from './pages/AttendancePage'
+import { BarberBookingsPage } from './pages/BarberBookingsPage'
 import { BranchesPage } from './pages/BranchesPage'
 import { ClosePage } from './pages/ClosePage'
 import { ChairPage } from './pages/ChairPage'
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="messages" element={<DeskOnly page={<ContactInbox />} />} />
             {/* barber pages */}
             <Route path="chair" element={<BarberOnly page={<ChairPage />} />} />
+            <Route path="bookings" element={<BarberOnly page={<BarberBookingsPage />} />} />
             <Route path="earnings" element={<BarberOnly page={<EarningsPage />} />} />
             <Route path="security" element={<SecurityPage />} />
             {/* owner pages: the database refuses everyone else anyway */}

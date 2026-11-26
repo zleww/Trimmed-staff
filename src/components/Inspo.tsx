@@ -143,7 +143,7 @@ export function InspoDraft({ items, onChange }: { items: ReadyInspo[]; onChange:
 }
 
 /** After booking: the inspo saved on it. Add or remove while the booking can still change. */
-export function BookingInspo({ bookingId, editable }: { bookingId: string; editable: boolean }) {
+export function BookingInspo({ bookingId, editable, title = 'Inspo for your barber' }: { bookingId: string; editable: boolean; title?: string }) {
   const list = useLoad(() => api.listInspo(bookingId), [bookingId])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -185,7 +185,7 @@ export function BookingInspo({ bookingId, editable }: { bookingId: string; edita
 
   return (
     <div className="mt-4 space-y-3 border-t border-glass-line pt-4">
-      <p className="text-[14px] font-medium">Inspo for your barber</p>
+      <p className="text-[14px] font-medium">{title}</p>
       {editable && items.length === 0 && !list.loading && <p className="text-[13px] leading-relaxed text-ink-3">{HELP}</p>}
       {error && <Notice tone="bad">{error}</Notice>}
       {list.error && <Notice tone="bad">{list.error}</Notice>}
