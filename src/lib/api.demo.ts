@@ -1,5 +1,5 @@
 import { manilaDateOf, manilaToday, manilaWallClock, addDays } from './dates'
-import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, OpeningHours, OwnerDashboard, Product, Profile, QueueItem, Review, Service, Session, StaffRole } from './types'
+import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, InventoryItem, OpeningHours, OwnerDashboard, Profile, QueueItem, Review, StaffMember, Service, Session, StaffRole } from './types'
 
 // Sample data for working on the screens without a database.
 // Development only: api.ts never loads this file in a production build.
@@ -598,7 +598,7 @@ export const demoApi: Api = {
   async listProducts() {
     await wait(150)
     needDesk()
-    return products.map((p) => ({ ...p }))
+    return products.filter((p) => p.active).map(({ id, name, price_centavos, stock_qty }) => ({ id, name, price_centavos, stock_qty }))
   },
   async recordSale(sale) {
     await wait()
@@ -640,6 +640,96 @@ export const demoApi: Api = {
       return { closed: true, cash_difference_centavos: count.cash_centavos - 52500, gcash_difference_centavos: count.gcash_centavos - 35000, maya_difference_centavos: count.maya_centavos }
     }
     return { closed: true }
+  },
+
+  async staffList() {
+    await wait()
+    needOwner()
+    return staffMembers.map((m) => ({ ...m, branch_name: branches.find((b) => b.id === m.branch_id)?.name ?? null }))
+  },
+  async createStaff(input) {
+    await wait(400)
+    needOwner()
+    if (input.fullName.trim().length < 2) throw new Error('Enter their full name.')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error('Enter a valid email address.')
+    if (input.password.length < 10) throw new Error('Use a password of at least 10 characters.')
+    if (staffMembers.some((m) => m.email === input.email.trim().toLowerCase())) throw new Error('That email already has a login.')
+    staffMembers.unshift({
+      id: crypto.randomUUID(),
+      full_name: input.fullName.trim(),
+      role: input.role,
+      email: input.email.trim().toLowerCase(),
+      active: true,
+      branch_id: input.branchId,
+      branch_name: null,
+      barber_id: input.role === 'barber' ? crypto.randomUUID() : null,
+      created_at: new Date().toISOString(),
+    })
+  },
+  async updateStaff(id, fullName, branchId) {
+    await wait()
+    needOwner()
+    const member = staffMembers.find((m) => m.id === id)
+    if (!member) throw new Error('Staff member not found')
+    if (fullName.trim().length < 2) throw new Error('Enter their full name')
+    if (member.role === 'desk' && !branchId) throw new Error('Pick the branch they work at')
+    member.full_name = fullName.trim()
+    if (member.role !== 'owner') member.branch_id = branchId
+  },
+  async setStaffPassword(_id, password) {
+    await wait(400)
+    needOwner()
+    if (password.length < 10) throw new Error('Use a password of at least 10 characters.')
+  },
+  async setStaffActive(id, active) {
+    await wait()
+    needOwner()
+    const member = staffMembers.find((m) => m.id === id)
+    if (!member) throw new Error('Staff member not found')
+    if (member.role === 'owner' && !active) throw new Error("You can't turn off your own account.")
+    member.active = active
+  },
+  async branchStats(days) {
+    await wait()
+    needOwner()
+    return branches.map((b, i) => ({
+      id: b.id,
+      name: b.name,
+      revenue_centavos: (i === 0 ? 5_800_00 : 3_100_00) * days,
+      previous_centavos: (i === 0 ? 5_400_00 : 3_350_00) * days,
+      sales: (i === 0 ? 19 : 11) * days,
+      done: (i === 0 ? 18 : 10) * days,
+      no_shows: Math.round(days / (i === 0 ? 6 : 4)),
+      cancelled: Math.round(days / 3),
+      barbers: barbers.filter((x) => x.branch_id === b.id).length,
+    }))
+  },
+  async inventory() {
+    await wait()
+    needOwner()
+    return products.map((p) => ({ ...p }))
+  },
+  async saveProduct(input) {
+    await wait()
+    needOwner()
+    if (input.name.trim().length < 2) throw new Error('Enter the product name')
+    if (input.price_centavos <= 0) throw new Error('Enter a price above zero')
+    const found = products.find((p) => p.id === input.id)
+    if (found) Object.assign(found, { name: input.name.trim(), price_centavos: input.price_centavos, low_stock_at: input.low_stock_at, active: input.active })
+    else products.push({ id: crypto.randomUUID(), name: input.name.trim(), price_centavos: input.price_centavos, low_stock_at: input.low_stock_at, active: input.active, stock_qty: 0 })
+  },
+  async stockIn(id, qty) {
+    await wait()
+    needOwner()
+    if (!Number.isInteger(qty) || qty < 1 || qty > 1000) throw new Error('Quantity must be 1 to 1000')
+    products.find((p) => p.id === id)!.stock_qty += qty
+  },
+  async adjustStock(id, counted, reason) {
+    await wait()
+    needOwner()
+    if (!Number.isInteger(counted) || counted < 0) throw new Error('Enter the number you counted')
+    if (reason.trim().length < 3) throw new Error('Give a reason')
+    products.find((p) => p.id === id)!.stock_qty = counted
   },
 
   async listInspo(bookingId) {
@@ -702,9 +792,21 @@ function sampleDashboard(days: number): OwnerDashboard {
 
 type SampleRow = QueueItem & { checked_in: string }
 let dayClosed = false
-const products: Product[] = [
-  { id: 'p1', name: 'Sample matte pomade', price_centavos: 35000, stock_qty: 6 },
-  { id: 'p2', name: 'Sample shine pomade', price_centavos: 32000, stock_qty: 2 },
+const products: InventoryItem[] = [
+  { id: 'p1', name: 'Sample matte pomade', price_centavos: 35000, stock_qty: 6, low_stock_at: 3, active: true },
+  { id: 'p2', name: 'Sample shine pomade', price_centavos: 32000, stock_qty: 2, low_stock_at: 3, active: true },
+  { id: 'p3', name: 'Sample hair clay', price_centavos: 38000, stock_qty: 0, low_stock_at: 2, active: true },
+]
+
+function needOwner() {
+  if (demoRole() !== 'owner') throw new Error('Not allowed')
+}
+
+const staffMembers: StaffMember[] = [
+  { id: 'st0', full_name: 'Sample Owner', role: 'owner', email: 'owner@sample.test', active: true, branch_id: null, branch_name: null, barber_id: null, created_at: '2026-11-01T00:00:00Z' },
+  { id: 'st1', full_name: 'Sample Desk One', role: 'desk', email: 'desk@sample.test', active: true, branch_id: 'br1', branch_name: null, barber_id: null, created_at: '2026-11-02T00:00:00Z' },
+  { id: 'st2', full_name: 'Sample Barber 1', role: 'barber', email: 'barber1@sample.test', active: true, branch_id: 'br1', branch_name: null, barber_id: 'b1', created_at: '2026-11-03T00:00:00Z' },
+  { id: 'st3', full_name: 'Sample Barber 3', role: 'barber', email: 'barber3@sample.test', active: false, branch_id: 'br2', branch_name: null, barber_id: 'b3', created_at: '2026-11-04T00:00:00Z' },
 ]
 
 function sampleRow(name: string, service: Service, barber: Barber | null, at: Date | null, status: QueueItem['status'], source: QueueItem['source']): SampleRow {

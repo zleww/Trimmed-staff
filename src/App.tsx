@@ -1,12 +1,15 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from './lib/auth'
+import { BranchesPage } from './pages/BranchesPage'
 import { ClosePage } from './pages/ClosePage'
 import { ContactInbox } from './pages/ContactInbox'
 import { DashboardPage } from './pages/DashboardPage'
+import { InventoryPage } from './pages/InventoryPage'
 import { RequestsPage } from './pages/RequestsPage'
+import { StaffPage } from './pages/StaffPage'
 import { TodayPage } from './pages/TodayPage'
 import { SignInPage } from './SignInPage'
-import { StaffHome, StaffLayout } from './StaffLayout'
+import { OwnerOnly, StaffHome, StaffLayout } from './StaffLayout'
 
 // Staff app routes. StaffLayout checks the role; the database checks again on every call.
 export default function App() {
@@ -20,6 +23,10 @@ export default function App() {
             <Route path="today" element={<TodayPage />} />
             <Route path="requests" element={<RequestsPage />} />
             <Route path="close" element={<ClosePage />} />
+            {/* owner pages: the database refuses everyone else anyway */}
+            <Route path="branches" element={<OwnerOnly page={<BranchesPage />} />} />
+            <Route path="staff" element={<OwnerOnly page={<StaffPage />} />} />
+            <Route path="inventory" element={<OwnerOnly page={<InventoryPage />} />} />
             <Route path="messages" element={<ContactInbox />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

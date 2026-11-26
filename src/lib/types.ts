@@ -239,6 +239,23 @@ export type Api = {
   /** blind count: the desk types what it counted; only the owner gets the differences back */
   closeDay(count: DayCount): Promise<CloseResult>
 
+  // owner: staff accounts (logins are made by the staff-admin server function)
+  staffList(): Promise<StaffMember[]>
+  createStaff(input: NewStaff): Promise<void>
+  updateStaff(id: string, fullName: string, branchId: string | null): Promise<void>
+  setStaffPassword(id: string, password: string): Promise<void>
+  setStaffActive(id: string, active: boolean): Promise<void>
+
+  // owner: how each branch is doing
+  branchStats(days: 7 | 30 | 90): Promise<BranchStats[]>
+
+  // owner: products and stock
+  inventory(): Promise<InventoryItem[]>
+  saveProduct(product: ProductInput): Promise<void>
+  stockIn(id: string, qty: number, note: string): Promise<void>
+  /** after a count: set the real number, with a reason */
+  adjustStock(id: string, counted: number, reason: string): Promise<void>
+
   // inspo on a booking
   listInspo(bookingId: string): Promise<Inspo[]>
   addInspo(bookingId: string, file: Blob, kind: Inspo['kind']): Promise<Inspo>
@@ -298,3 +315,34 @@ export type CloseResult = {
   gcash_difference_centavos?: number
   maya_difference_centavos?: number
 }
+
+export type StaffMember = {
+  id: string
+  full_name: string
+  role: 'owner' | 'desk' | 'barber'
+  email: string
+  active: boolean
+  branch_id: string | null
+  branch_name: string | null
+  barber_id: string | null
+  created_at: string
+}
+
+export type NewStaff = { fullName: string; email: string; role: 'desk' | 'barber'; branchId: string; password: string }
+
+export type BranchStats = {
+  id: string
+  name: string
+  revenue_centavos: number
+  previous_centavos: number
+  sales: number
+  done: number
+  no_shows: number
+  cancelled: number
+  barbers: number
+}
+
+export type InventoryItem = { id: string; name: string; price_centavos: number; stock_qty: number; low_stock_at: number; active: boolean }
+
+/** id null = a new product */
+export type ProductInput = { id: string | null; name: string; price_centavos: number; low_stock_at: number; active: boolean }

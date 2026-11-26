@@ -1,5 +1,5 @@
 import type { AuthError, PostgrestError, SupabaseClient } from '@supabase/supabase-js'
-import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, CloseResult, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, Session, SignupDetails, StaffRole } from './types'
+import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole } from './types'
 
 // Turns database and sign-in errors into plain sentences.
 // Our own database functions already raise plain messages (code P0001), so
@@ -46,6 +46,28 @@ function pendingFrom(user: User): SignupDetails | null {
 }
 
 export function createSupabaseApi(db: SupabaseClient): Api {
+
+  // staff logins go through the "staff-admin" server function, which holds the secret key
+  async function staffAdmin(body: Record<string, unknown>) {
+    const { data } = await db.auth.getSession()
+    let answer: { error?: string }
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '',
+          Authorization: `Bearer ${data.session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify(body),
+      })
+      answer = await response.json().catch(() => ({ error: 'Staff accounts are not working right now. Try again later.' }))
+      if (!response.ok) throw new Error(answer.error ?? 'Something went wrong. Try again.')
+    } catch (error) {
+      if (error instanceof TypeError) throw new Error("Can't reach the server. Check your connection.")
+      throw error
+    }
+  }
   const toSession = (user: User): Session | null =>
     user ? { userId: user.id, email: user.email ?? '', pending: pendingFrom(user) } : null
 
@@ -429,6 +451,50 @@ export function createSupabaseApi(db: SupabaseClient): Api {
           p_note: count.note || null,
         }),
       ) as CloseResult
+    },
+
+    async staffList() {
+      return check(await db.rpc('staff_list')) as StaffMember[]
+    },
+
+    async createStaff(input) {
+      await staffAdmin({ action: 'create', ...input })
+    },
+
+    async updateStaff(id, fullName, branchId) {
+      check(await db.rpc('update_staff', { p_id: id, p_full_name: fullName, p_branch: branchId }))
+    },
+
+    async setStaffPassword(id, password) {
+      await staffAdmin({ action: 'set_password', staffId: id, password })
+    },
+
+    async setStaffActive(id, active) {
+      await staffAdmin({ action: 'set_active', staffId: id, active })
+    },
+
+    async branchStats(days) {
+      return check(await db.rpc('branch_stats', { p_days: days })) as BranchStats[]
+    },
+
+    async inventory() {
+      return check(
+        await db.from('products').select('id, name, price_centavos, stock_qty, low_stock_at, active').order('active', { ascending: false }).order('name'),
+      ) as InventoryItem[]
+    },
+
+    async saveProduct(product) {
+      const fields = { name: product.name, price_centavos: product.price_centavos, low_stock_at: product.low_stock_at, active: product.active }
+      if (product.id) check(await db.from('products').update(fields).eq('id', product.id))
+      else check(await db.from('products').insert(fields))
+    },
+
+    async stockIn(id, qty, note) {
+      check(await db.rpc('stock_in', { p_product: id, p_qty: qty, p_note: note || null }))
+    },
+
+    async adjustStock(id, counted, reason) {
+      check(await db.rpc('adjust_stock', { p_product: id, p_counted: counted, p_reason: reason }))
     },
 
     async listInspo(bookingId) {

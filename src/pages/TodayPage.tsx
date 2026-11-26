@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type SelectHTMLAttributes } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Alert, Ban, Calendar, CheckCircle, Clock, Plus, Scissors } from '../components/icons'
 import { Button, Dialog, Field, Notice, Segmented, Skeleton } from '../components/ui'
 import { api } from '../lib/api'
@@ -7,6 +7,7 @@ import { errorMessage, peso } from '../lib/format'
 import { parsePeso } from '../lib/money'
 import type { Barber, PayMethod, Product, QueueItem, QueueStatus, Service } from '../lib/types'
 import { useLoad } from '../lib/useLoad'
+import { Select } from './Select'
 
 const dayFmt = new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' })
 
@@ -219,17 +220,6 @@ function Row({ row, children }: { row: QueueItem; children?: ReactNode }) {
         {children}
       </span>
     </li>
-  )
-}
-
-function Select({ label, children, ...rest }: { label: string } & SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-[14px] font-medium">{label}</span>
-      <select className="h-12 w-full rounded-[10px] border border-line bg-card px-3 text-[16px] text-ink" {...rest}>
-        {children}
-      </select>
-    </label>
   )
 }
 

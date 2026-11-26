@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Outlet } from 'react-router'
-import { Calendar, CheckCircle, Grid, LogOut, Mail, Moon, Sun, Users } from './components/icons'
+import { Calendar, CheckCircle, Grid, List, LogOut, Mail, MapPin, Menu, Moon, Sun, User, Users, X } from './components/icons'
 import { LogoMark } from './components/Logo'
 import { Button, Skeleton } from './components/ui'
 import { isDemo } from './lib/api'
@@ -14,6 +14,14 @@ const today = new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long',
 // This only hides screens; the database checks the role on every call.
 export function StaffLayout() {
   const { session, profile, staffRole, signOut } = useAuth()
+  const [sheet, setSheet] = useState(false)
+  // Esc closes the More sheet
+  useEffect(() => {
+    if (!sheet) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSheet(false)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sheet])
 
   if (session === null || staffRole === null) return <Navigate to="/signin" replace />
   if (session === undefined || staffRole === undefined) return <Skeleton className="m-6 h-64" />
@@ -29,13 +37,24 @@ export function StaffLayout() {
     )
   }
 
-  const links = [
-    ...(staffRole === 'owner' ? [{ to: '/', label: 'Dashboard', icon: Grid, end: true }] : []),
-    { to: '/today', label: 'Today', icon: Users, end: false },
-    { to: '/requests', label: 'Requests', icon: Calendar, end: false },
-    { to: '/messages', label: 'Messages', icon: Mail, end: false },
-    { to: '/close', label: 'Close day', icon: CheckCircle, end: false },
+  // grouped so the panel scans: the day's work first, then the owner's tools
+  const desk: NavItem[] = [
+    { to: '/today', label: 'Today', icon: Users },
+    { to: '/requests', label: 'Requests', icon: Calendar },
+    { to: '/messages', label: 'Messages', icon: Mail },
+    { to: '/close', label: 'Close day', icon: CheckCircle },
   ]
+  const owner: NavItem[] = [
+    { to: '/', label: 'Dashboard', icon: Grid, end: true },
+    { to: '/branches', label: 'Branches', icon: MapPin },
+    { to: '/staff', label: 'Staff', icon: User },
+    { to: '/inventory', label: 'Inventory', icon: List },
+  ]
+  const groups = staffRole === 'owner' ? [{ title: 'Owner', items: owner }, { title: 'Front desk', items: desk }] : [{ title: 'Front desk', items: desk }]
+  const all = groups.flatMap((g) => g.items)
+  // phones: four tabs; the rest sit under More
+  const tabs = all.slice(0, staffRole === 'owner' ? 3 : 4)
+  const more = all.slice(tabs.length)
   const leave = () => void signOut()
   const role = staffRole === 'owner' ? 'Owner' : 'Front desk'
   const name = profile?.full_name ?? role
@@ -48,27 +67,16 @@ export function StaffLayout() {
           <LogoMark size={36} />
           <span className="text-[17px] font-medium">Trimmed</span>
         </Link>
-        <nav aria-label="Staff" className="mt-6 flex flex-col gap-1">
-          {links.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                `relative flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] transition-colors ${
-                  isActive ? 'bg-raised text-ink' : 'text-ink-2 hover:bg-raised/60 hover:text-ink'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {/* the gold marker on the current page */}
-                  {isActive && <span aria-hidden="true" className="absolute -left-3 h-5 w-[3px] rounded-r bg-gold" />}
-                  <Icon size={19} />
-                  {label}
-                </>
-              )}
-            </NavLink>
+        <nav aria-label="Staff" className="mt-5 flex flex-col gap-5">
+          {groups.map((group) => (
+            <div key={group.title}>
+              <p className="label px-3 pb-1.5 text-[11px]">{group.title}</p>
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => (
+                  <PanelLink key={item.to} item={item} />
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <button onClick={leave} className="mt-auto flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] text-ink-2 hover:bg-raised/60 hover:text-ink">
@@ -107,7 +115,7 @@ export function StaffLayout() {
 
       {/* tab bar (phone) */}
       <nav aria-label="Staff" className="fixed inset-x-3 bottom-3 z-20 flex rounded-[14px] border border-line bg-card p-1.5 md:hidden">
-        {links.map(({ to, label, icon: Icon, end }) => (
+        {tabs.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -120,7 +128,38 @@ export function StaffLayout() {
             {label}
           </NavLink>
         ))}
+        {more.length > 0 && (
+          <button
+            onClick={() => setSheet(true)}
+            aria-expanded={sheet}
+            className="flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-[10px] text-[12px] text-ink-3"
+          >
+            <Menu size={18} />
+            More
+          </button>
+        )}
       </nav>
+
+      {/* the rest of the pages, as a sheet over the tab bar (phone) */}
+      {sheet && (
+        <div className="fixed inset-0 z-30 bg-black/60 md:hidden" onClick={() => setSheet(false)}>
+          <nav
+            aria-label="More pages"
+            className="rise absolute inset-x-3 bottom-3 rounded-[14px] border border-line bg-card p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-3 py-1">
+              <p className="label">More</p>
+              <button onClick={() => setSheet(false)} aria-label="Close" className="grid size-11 place-items-center text-ink-2">
+                <X size={18} />
+              </button>
+            </div>
+            {more.map((item) => (
+              <PanelLink key={item.to} item={item} onPick={() => setSheet(false)} />
+            ))}
+          </nav>
+        </div>
+      )}
     </div>
   )
 }
@@ -129,6 +168,12 @@ export function StaffLayout() {
 export function StaffHome({ owner }: { owner: ReactNode }) {
   const { staffRole } = useAuth()
   return staffRole === 'owner' ? owner : <Navigate to="/today" replace />
+}
+
+/** Owner pages: anyone else goes back to today's list. */
+export function OwnerOnly({ page }: { page: ReactNode }) {
+  const { staffRole } = useAuth()
+  return staffRole === 'owner' ? page : <Navigate to="/today" replace />
 }
 
 // the date at the top left, worked out once when the screen opens
@@ -152,5 +197,32 @@ function ThemeToggle() {
     >
       {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
     </button>
+  )
+}
+
+type NavItem = { to: string; label: string; icon: typeof Grid; end?: boolean }
+
+function PanelLink({ item, onPick }: { item: NavItem; onPick?: () => void }) {
+  const { to, label, icon: Icon, end } = item
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onPick}
+      className={({ isActive }) =>
+        `relative flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] transition-colors ${
+          isActive ? 'bg-raised text-ink' : 'text-ink-2 hover:bg-raised/60 hover:text-ink'
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {/* the gold marker on the current page */}
+          {isActive && <span aria-hidden="true" className="absolute -left-3 h-5 w-[3px] rounded-r bg-gold" />}
+          <Icon size={19} />
+          {label}
+        </>
+      )}
+    </NavLink>
   )
 }
