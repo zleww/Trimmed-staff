@@ -1,5 +1,5 @@
 import { manilaDateOf, manilaToday, manilaWallClock, addDays } from './dates'
-import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, OpeningHours, OwnerDashboard, Profile, Review, Service, Session, StaffRole } from './types'
+import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, OpeningHours, OwnerDashboard, Product, Profile, QueueItem, Review, Service, Session, StaffRole } from './types'
 
 // Sample data for working on the screens without a database.
 // Development only: api.ts never loads this file in a production build.
@@ -546,6 +546,102 @@ export const demoApi: Api = {
     return sampleDashboard(days)
   },
 
+  async queueForDay(date) {
+    await wait()
+    needDesk()
+    return queue
+      .filter((q) => manilaDateOf(q.starts_at ?? q.checked_in) === date)
+      .sort((a, b) => (a.starts_at ?? a.checked_in).localeCompare(b.starts_at ?? b.checked_in))
+      .map(({ checked_in: _c, ...q }) => ({ ...q }))
+  },
+  async addWalkIn(name, serviceId, barberId) {
+    await wait()
+    needDesk()
+    if (name.trim().length < 2) throw new Error("Enter the customer's name")
+    const service = services.find((s) => s.id === serviceId)
+    if (!service) throw new Error('That service is not available')
+    const barber = barbers.find((b) => b.id === barberId)
+    queue.push(sampleRow(name.trim(), service, barber ?? null, null, 'checked_in', 'walk_in'))
+  },
+  async checkIn(id) {
+    await wait(150)
+    const row = queueRow(id)
+    if (row.status !== 'booked') throw new Error('Only a booked appointment can be checked in')
+    row.status = 'checked_in'
+  },
+  async startService(id, barberId) {
+    await wait(150)
+    const row = queueRow(id)
+    if (row.status !== 'checked_in') throw new Error('Check the customer in first')
+    if (!row.barber_id) {
+      const barber = barbers.find((b) => b.id === barberId)
+      if (!barber) throw new Error('Pick a barber')
+      row.barber_id = barber.id
+      row.barber_name = barber.display_name
+      row.starts_at = new Date().toISOString()
+    }
+    row.status = 'in_chair'
+  },
+  async markNoShow(id) {
+    await wait(150)
+    const row = queueRow(id)
+    if (row.status !== 'booked') throw new Error('Only a booked appointment can be a no-show')
+    row.status = 'no_show'
+  },
+  async cancelAppointment(id, reason) {
+    await wait(150)
+    const row = queueRow(id)
+    if (!['booked', 'checked_in'].includes(row.status)) throw new Error('This appointment can no longer be cancelled')
+    if (reason.trim().length < 3) throw new Error('Give a reason')
+    row.status = 'cancelled'
+  },
+  async listProducts() {
+    await wait(150)
+    needDesk()
+    return products.map((p) => ({ ...p }))
+  },
+  async recordSale(sale) {
+    await wait()
+    needDesk()
+    if (dayClosed) throw new Error('Today is already closed')
+    if (sale.items.length === 0) throw new Error('Add at least one service or product')
+    let total = 0
+    for (const item of sale.items) {
+      if ('service_id' in item) total += services.find((s) => s.id === item.service_id)?.price_centavos ?? 0
+      else {
+        const product = products.find((p) => p.id === item.product_id)
+        if (!product) throw new Error('A product in this sale is not available')
+        if (product.stock_qty < item.qty) throw new Error(`Not enough stock (only ${product.stock_qty} left)`)
+        total += product.price_centavos * item.qty
+      }
+    }
+    const tips = sale.tips.reduce((sum, t) => sum + t.amount_centavos, 0)
+    const paid = sale.payments.reduce((sum, p) => sum + p.amount_centavos, 0)
+    for (const p of sale.payments) {
+      if (p.method !== 'cash' && !/^[A-Z0-9]{6,30}$/.test((p.reference ?? '').replace(/\s/g, '').toUpperCase())) {
+        throw new Error('Enter the reference number from the receipt')
+      }
+    }
+    if (paid !== total + tips) throw new Error(`Payments must add up to ₱${(total + tips) / 100}`)
+    for (const item of sale.items) if ('product_id' in item) products.find((p) => p.id === item.product_id)!.stock_qty -= item.qty
+    if (sale.appointmentId) queueRow(sale.appointmentId).status = 'done'
+    return { total_centavos: total, tips_centavos: tips }
+  },
+  async isDayClosed() {
+    await wait(100)
+    return dayClosed
+  },
+  async closeDay(count) {
+    await wait()
+    needDesk()
+    if (dayClosed) throw new Error('Today is already closed')
+    dayClosed = true
+    if (demoRole() === 'owner') {
+      return { closed: true, cash_difference_centavos: count.cash_centavos - 52500, gcash_difference_centavos: count.gcash_centavos - 35000, maya_difference_centavos: count.maya_centavos }
+    }
+    return { closed: true }
+  },
+
   async listInspo(bookingId) {
     await wait(150)
     return [...inspo.values()].filter((i) => i.bookingId === bookingId).map(({ bookingId: _booking, ...item }) => item)
@@ -600,4 +696,53 @@ function sampleDashboard(days: number): OwnerDashboard {
       paid_by: i % 2 ? 'gcash' : 'cash',
     })),
   }
+}
+
+// ---------- desk sample data: today's list ----------
+
+type SampleRow = QueueItem & { checked_in: string }
+let dayClosed = false
+const products: Product[] = [
+  { id: 'p1', name: 'Sample matte pomade', price_centavos: 35000, stock_qty: 6 },
+  { id: 'p2', name: 'Sample shine pomade', price_centavos: 32000, stock_qty: 2 },
+]
+
+function sampleRow(name: string, service: Service, barber: Barber | null, at: Date | null, status: QueueItem['status'], source: QueueItem['source']): SampleRow {
+  return {
+    id: crypto.randomUUID(),
+    code: Math.random().toString(36).slice(2, 10).toUpperCase(),
+    starts_at: at?.toISOString() ?? null,
+    ends_at: at ? new Date(at.getTime() + service.duration_minutes * 60_000).toISOString() : null,
+    status,
+    source,
+    service_id: service.id,
+    service_name: service.name,
+    price_centavos: service.price_centavos,
+    branch_id: barber?.branch_id ?? 'br1',
+    barber_id: barber?.id ?? null,
+    barber_name: barber?.display_name ?? null,
+    customer_name: name,
+    customer_mobile: source === 'online' ? '09171234567' : null,
+    checked_in: new Date().toISOString(),
+  }
+}
+
+// a made-up day around "now": one done, one in the chair, one waiting, a few to come
+const queue: SampleRow[] = (() => {
+  const at = (minutes: number) => new Date(Math.round((Date.now() + minutes * 60_000) / 900_000) * 900_000)
+  return [
+    sampleRow('Sample Customer A', services[0], barbers[0], at(-90), 'done', 'online'),
+    sampleRow('Sample Customer B', services[1], barbers[1], at(-20), 'in_chair', 'online'),
+    sampleRow('Sample Walk-in C', services[2], null, null, 'checked_in', 'walk_in'),
+    sampleRow('Sample Customer D', services[3], barbers[0], at(-5), 'booked', 'online'),
+    sampleRow('Sample Customer E', services[0], barbers[1], at(45), 'booked', 'desk'),
+    sampleRow('Sample Customer F', services[4], barbers[0], at(120), 'booked', 'online'),
+  ]
+})()
+
+function queueRow(id: string): SampleRow {
+  needDesk()
+  const row = queue.find((q) => q.id === id)
+  if (!row) throw new Error('Appointment not found')
+  return row
 }

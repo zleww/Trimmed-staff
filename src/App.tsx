@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from './lib/auth'
+import { ClosePage } from './pages/ClosePage'
 import { ContactInbox } from './pages/ContactInbox'
 import { DashboardPage } from './pages/DashboardPage'
 import { RequestsPage } from './pages/RequestsPage'
+import { TodayPage } from './pages/TodayPage'
 import { SignInPage } from './SignInPage'
 import { StaffHome, StaffLayout } from './StaffLayout'
 
@@ -15,7 +17,9 @@ export default function App() {
           <Route path="signin" element={<SignInPage />} />
           <Route element={<StaffLayout />}>
             <Route index element={<StaffHome owner={<DashboardPage />} />} />
+            <Route path="today" element={<TodayPage />} />
             <Route path="requests" element={<RequestsPage />} />
+            <Route path="close" element={<ClosePage />} />
             <Route path="messages" element={<ContactInbox />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -224,6 +224,21 @@ export type Api = {
   /** owner only: every number on the owner's home screen */
   ownerDashboard(days: 7 | 30 | 90): Promise<OwnerDashboard>
 
+  // front desk: today's queue, walk-ins, sales, closing the day
+  queueForDay(date: string): Promise<QueueItem[]>
+  addWalkIn(name: string, serviceId: string, barberId: string | null): Promise<void>
+  checkIn(id: string): Promise<void>
+  /** barberId is needed for a walk-in that has no barber yet */
+  startService(id: string, barberId: string | null): Promise<void>
+  markNoShow(id: string): Promise<void>
+  cancelAppointment(id: string, reason: string): Promise<void>
+  listProducts(): Promise<Product[]>
+  /** prices are looked up by the database; we only send what was sold */
+  recordSale(sale: SaleInput): Promise<{ total_centavos: number; tips_centavos: number }>
+  isDayClosed(date: string): Promise<boolean>
+  /** blind count: the desk types what it counted; only the owner gets the differences back */
+  closeDay(count: DayCount): Promise<CloseResult>
+
   // inspo on a booking
   listInspo(bookingId: string): Promise<Inspo[]>
   addInspo(bookingId: string, file: Blob, kind: Inspo['kind']): Promise<Inspo>
@@ -241,4 +256,45 @@ export interface OwnerDashboard {
   barbers: { name: string; services: number; revenue_centavos: number }[]
   services: { name: string; count: number }[]
   recent: { id: string; sold_at: string; total_centavos: number; items: string | null; barber: string | null; paid_by: string | null }[]
+}
+
+export type QueueStatus = 'requested' | 'booked' | 'checked_in' | 'in_chair' | 'done' | 'cancelled' | 'declined' | 'no_show'
+
+/** One row of today's list at the desk (queue_for_day). */
+export type QueueItem = {
+  id: string
+  code: string
+  starts_at: string | null
+  ends_at: string | null
+  status: QueueStatus
+  source: 'online' | 'desk' | 'walk_in'
+  service_id: string
+  service_name: string
+  price_centavos: number
+  branch_id: string
+  barber_id: string | null
+  barber_name: string | null
+  customer_name: string
+  customer_mobile: string | null
+}
+
+export type Product = { id: string; name: string; price_centavos: number; stock_qty: number }
+
+export type PayMethod = 'cash' | 'gcash' | 'maya'
+
+export type SaleInput = {
+  appointmentId: string | null
+  items: ({ service_id: string; barber_id: string } | { product_id: string; qty: number })[]
+  payments: { method: PayMethod; amount_centavos: number; reference?: string }[]
+  tips: { barber_id: string; amount_centavos: number }[]
+}
+
+export type DayCount = { cash_centavos: number; gcash_centavos: number; maya_centavos: number; note: string }
+
+export type CloseResult = {
+  closed: true
+  /** owner only: counted minus expected */
+  cash_difference_centavos?: number
+  gcash_difference_centavos?: number
+  maya_difference_centavos?: number
 }

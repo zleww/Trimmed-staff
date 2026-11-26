@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Outlet } from 'react-router'
-import { Calendar, Grid, LogOut, Mail, Moon, Sun } from './components/icons'
+import { Calendar, CheckCircle, Grid, LogOut, Mail, Moon, Sun, Users } from './components/icons'
 import { LogoMark } from './components/Logo'
 import { Button, Skeleton } from './components/ui'
 import { isDemo } from './lib/api'
@@ -31,8 +31,10 @@ export function StaffLayout() {
 
   const links = [
     ...(staffRole === 'owner' ? [{ to: '/', label: 'Dashboard', icon: Grid, end: true }] : []),
+    { to: '/today', label: 'Today', icon: Users, end: false },
     { to: '/requests', label: 'Requests', icon: Calendar, end: false },
     { to: '/messages', label: 'Messages', icon: Mail, end: false },
+    { to: '/close', label: 'Close day', icon: CheckCircle, end: false },
   ]
   const leave = () => void signOut()
   const role = staffRole === 'owner' ? 'Owner' : 'Front desk'
@@ -123,10 +125,10 @@ export function StaffLayout() {
   )
 }
 
-/** The home page: the owner gets the dashboard, the desk goes straight to requests. */
+/** The home page: the owner gets the dashboard, the desk goes straight to today's list. */
 export function StaffHome({ owner }: { owner: ReactNode }) {
   const { staffRole } = useAuth()
-  return staffRole === 'owner' ? owner : <Navigate to="/requests" replace />
+  return staffRole === 'owner' ? owner : <Navigate to="/today" replace />
 }
 
 // the date at the top left, worked out once when the screen opens

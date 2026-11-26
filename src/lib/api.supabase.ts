@@ -1,5 +1,5 @@
 import type { AuthError, PostgrestError, SupabaseClient } from '@supabase/supabase-js'
-import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, Inspo, OwnerDashboard, Profile, Rating, Session, SignupDetails, StaffRole } from './types'
+import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, CloseResult, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, Session, SignupDetails, StaffRole } from './types'
 
 // Turns database and sign-in errors into plain sentences.
 // Our own database functions already raise plain messages (code P0001), so
@@ -375,6 +375,60 @@ export function createSupabaseApi(db: SupabaseClient): Api {
 
     async ownerDashboard(days) {
       return check(await db.rpc('owner_dashboard', { p_days: days })) as OwnerDashboard
+    },
+
+    async queueForDay(date) {
+      return check(await db.rpc('queue_for_day', { p_date: date })) as QueueItem[]
+    },
+
+    async addWalkIn(name, serviceId, barberId) {
+      check(await db.rpc('add_walk_in', { p_guest_name: name, p_service: serviceId, p_barber: barberId }))
+    },
+
+    async checkIn(id) {
+      check(await db.rpc('check_in', { p_id: id }))
+    },
+
+    async startService(id, barberId) {
+      check(await db.rpc('start_service', { p_id: id, p_barber: barberId }))
+    },
+
+    async markNoShow(id) {
+      check(await db.rpc('mark_no_show', { p_id: id }))
+    },
+
+    async cancelAppointment(id, reason) {
+      check(await db.rpc('cancel_appointment', { p_id: id, p_reason: reason }))
+    },
+
+    async listProducts() {
+      return check(await db.from('products').select('id, name, price_centavos, stock_qty').eq('active', true).order('name')) as Product[]
+    },
+
+    async recordSale(sale) {
+      return check(
+        await db.rpc('record_sale', {
+          p_appointment: sale.appointmentId,
+          p_items: sale.items,
+          p_payments: sale.payments,
+          p_tips: sale.tips,
+        }),
+      ) as { total_centavos: number; tips_centavos: number }
+    },
+
+    async isDayClosed(date) {
+      return check(await db.rpc('is_day_closed', { p_date: date })) as boolean
+    },
+
+    async closeDay(count) {
+      return check(
+        await db.rpc('close_day', {
+          p_cash: count.cash_centavos,
+          p_gcash: count.gcash_centavos,
+          p_maya: count.maya_centavos,
+          p_note: count.note || null,
+        }),
+      ) as CloseResult
     },
 
     async listInspo(bookingId) {
