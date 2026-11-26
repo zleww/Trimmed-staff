@@ -1,5 +1,5 @@
 import type { AuthError, PostgrestError, SupabaseClient } from '@supabase/supabase-js'
-import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, Earnings, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole } from './types'
+import type { Api, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, Earnings, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole, WorkDay } from './types'
 
 // Turns database and sign-in errors into plain sentences.
 // Our own database functions already raise plain messages (code P0001), so
@@ -523,6 +523,16 @@ export function createSupabaseApi(db: SupabaseClient): Api {
 
     async setStaffPassword(id, password) {
       await staffAdmin({ action: 'set_password', staffId: id, password })
+    },
+
+    async barberHours(barberId) {
+      const days = check(await db.from('barber_hours').select('weekday, starts_at, ends_at').eq('barber_id', barberId).order('weekday')) as WorkDay[]
+      // the database gives "09:00:00"; the time inputs want "09:00"
+      return days.map((d) => ({ weekday: d.weekday, starts_at: d.starts_at.slice(0, 5), ends_at: d.ends_at.slice(0, 5) }))
+    },
+
+    async setBarberHours(barberId, days) {
+      check(await db.rpc('set_barber_hours', { p_barber: barberId, p_hours: days }))
     },
 
     async setStaffActive(id, active) {

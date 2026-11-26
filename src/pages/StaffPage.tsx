@@ -1,16 +1,18 @@
 import { useState } from 'react'
-import { Ban, CheckCircle, Plus } from '../components/icons'
+import { Ban, CheckCircle, Clock, Plus } from '../components/icons'
 import { Button, Dialog, Field, Notice, PasswordField, Segmented, Skeleton } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { errorMessage } from '../lib/format'
-import type { Branch, StaffMember } from '../lib/types'
+import type { Branch, StaffMember, WorkDay } from '../lib/types'
 import { useLoad } from '../lib/useLoad'
 import { Select } from './Select'
 
 const roleName = { owner: 'Owner', desk: 'Front desk', barber: 'Barber' } as const
 
-type Open = { kind: 'add' } | { kind: 'edit'; member: StaffMember } | { kind: 'password'; member: StaffMember } | null
+type Open =
+  | { kind: 'hours'; member: StaffMember }
+  | { kind: 'add' } | { kind: 'edit'; member: StaffMember } | { kind: 'password'; member: StaffMember } | null
 
 /** The owner adds staff logins, moves people between branches, resets passwords, turns accounts off. */
 export function StaffPage() {
@@ -85,6 +87,12 @@ export function StaffPage() {
                 <Button variant="ghost" className="h-11" onClick={() => setOpen({ kind: 'edit', member: m })}>
                   Edit
                 </Button>
+                {m.barber_id && (
+                  <Button variant="ghost" className="h-11" onClick={() => setOpen({ kind: 'hours', member: m })}>
+                    <Clock size={16} />
+                    Working hours
+                  </Button>
+                )}
                 <Button variant="ghost" className="h-11" onClick={() => setOpen({ kind: 'password', member: m })}>
                   Set password
                 </Button>
@@ -104,6 +112,14 @@ export function StaffPage() {
       )}
       {open?.kind === 'edit' && branches.data && (
         <EditDialog member={open.member} branches={branches.data} onClose={() => setOpen(null)} onDone={() => done(`Saved ${open.member.full_name}.`)} />
+      )}
+      {open?.kind === 'hours' && open.member.barber_id && (
+        <HoursDialog
+          member={open.member}
+          barberId={open.member.barber_id}
+          onClose={() => setOpen(null)}
+          onDone={() => done(`Saved ${open.member.full_name}'s working hours. Customers can book them in those hours.`)}
+        />
       )}
       {open?.kind === 'password' && (
         <PasswordDialog member={open.member} onClose={() => setOpen(null)} onDone={() => done(`New password set for ${open.member.full_name}. Tell them in person.`)} />
@@ -253,6 +269,108 @@ function PasswordDialog({ member, onClose, onDone }: { member: StaffMember; onCl
         {error && <Notice tone="bad">{error}</Notice>}
         <PasswordField label="New password" hint="At least 10 characters." autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         <DialogButtons busy={busy} label="Set password" onClose={onClose} />
+      </form>
+    </Dialog>
+  )
+}
+
+// Monday first, like a work week. weekday 0 = Sunday, as in the database.
+const WEEK = [
+  { weekday: 1, name: 'Monday' },
+  { weekday: 2, name: 'Tuesday' },
+  { weekday: 3, name: 'Wednesday' },
+  { weekday: 4, name: 'Thursday' },
+  { weekday: 5, name: 'Friday' },
+  { weekday: 6, name: 'Saturday' },
+  { weekday: 0, name: 'Sunday' },
+]
+
+type DayRow = { works: boolean; starts_at: string; ends_at: string }
+
+// A barber's week. Customers only see free times inside these hours
+// (and inside the branch's opening hours).
+function HoursDialog({ member, barberId, onClose, onDone }: { member: StaffMember; barberId: string; onClose: () => void; onDone: () => void }) {
+  const saved = useLoad(() => api.barberHours(barberId), [barberId])
+  const [rows, setRows] = useState<Record<number, DayRow> | null>(null)
+  const { busy, error, setError, run } = useSubmit()
+
+  // fill the form once the saved week arrives
+  const week =
+    rows ??
+    (saved.data
+      ? Object.fromEntries(
+          WEEK.map(({ weekday }) => {
+            const day = saved.data!.find((d) => d.weekday === weekday)
+            return [weekday, { works: Boolean(day), starts_at: day?.starts_at ?? '09:00', ends_at: day?.ends_at ?? '18:00' }]
+          }),
+        )
+      : null)
+
+  const change = (weekday: number, patch: Partial<DayRow>) => week && setRows({ ...week, [weekday]: { ...week[weekday], ...patch } })
+
+  return (
+    <Dialog open title={`${member.full_name}'s working hours`} onClose={onClose}>
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!week) return
+          const days: WorkDay[] = WEEK.filter(({ weekday }) => week[weekday].works).map(({ weekday }) => ({
+            weekday,
+            starts_at: week[weekday].starts_at,
+            ends_at: week[weekday].ends_at,
+          }))
+          const wrong = days.find((d) => !d.starts_at || !d.ends_at || d.ends_at <= d.starts_at)
+          if (wrong) return setError(`${WEEK.find((w) => w.weekday === wrong.weekday)?.name}: the end time must be after the start time.`)
+          void run(async () => {
+            await api.setBarberHours(barberId, days)
+            onDone()
+          })
+        }}
+      >
+        {error && <Notice tone="bad">{error}</Notice>}
+        {saved.error && <Notice tone="bad">{saved.error}</Notice>}
+        {!week && !saved.error && <Skeleton className="h-72" />}
+        {week && (
+          <ul className="divide-y divide-[var(--line)] rounded-[10px] border border-line">
+            {WEEK.map(({ weekday, name }) => {
+              const day = week[weekday]
+              return (
+                <li key={weekday} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+                  <label className="flex min-h-11 w-32 items-center gap-2.5 text-[15px]">
+                    <input type="checkbox" className="size-5 accent-[var(--gold)]" checked={day.works} onChange={(e) => change(weekday, { works: e.target.checked })} />
+                    {name}
+                  </label>
+                  {day.works ? (
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        aria-label={`${name} start`}
+                        step={900}
+                        value={day.starts_at}
+                        onChange={(e) => change(weekday, { starts_at: e.target.value })}
+                        className="num h-11 rounded-[10px] border border-line bg-raised px-2 text-[15px]"
+                      />
+                      <span className="text-ink-3">to</span>
+                      <input
+                        type="time"
+                        aria-label={`${name} end`}
+                        step={900}
+                        value={day.ends_at}
+                        onChange={(e) => change(weekday, { ends_at: e.target.value })}
+                        className="num h-11 rounded-[10px] border border-line bg-raised px-2 text-[15px]"
+                      />
+                    </span>
+                  ) : (
+                    <span className="text-[14px] text-ink-3">Day off</span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <p className="text-[13px] text-ink-3">Customers only see times inside these hours and the branch's opening hours. Bookings already made stay.</p>
+        <DialogButtons busy={busy} label="Save hours" onClose={onClose} />
       </form>
     </Dialog>
   )

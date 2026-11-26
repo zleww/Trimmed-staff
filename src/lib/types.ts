@@ -27,6 +27,9 @@ export type Barber = {
 }
 
 /** weekday: 0 = Sunday. Times are "HH:MM:SS" in Manila. One row per branch per open day. */
+/** One working day for a barber. weekday 0 = Sunday; times are "HH:MM" in Manila. */
+export type WorkDay = { weekday: number; starts_at: string; ends_at: string }
+
 export type OpeningHours = { branch_id: string; weekday: number; opens_at: string; closes_at: string }
 
 export type BookingRules = {
@@ -256,6 +259,10 @@ export type Api = {
   updateStaff(id: string, fullName: string, branchId: string | null): Promise<void>
   setStaffPassword(id: string, password: string): Promise<void>
   setStaffActive(id: string, active: boolean): Promise<void>
+  /** a barber's working week; a missing weekday is a day off */
+  barberHours(barberId: string): Promise<WorkDay[]>
+  /** owner only: replaces the whole week at once */
+  setBarberHours(barberId: string, days: WorkDay[]): Promise<void>
 
   // owner: how each branch is doing
   branchStats(days: 7 | 30 | 90): Promise<BranchStats[]>

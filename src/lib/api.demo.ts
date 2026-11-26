@@ -1,5 +1,5 @@
 import { manilaDateOf, manilaToday, manilaWallClock, addDays } from './dates'
-import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, InventoryItem, OpeningHours, OwnerDashboard, Profile, QueueItem, Review, StaffMember, Service, Session, StaffRole } from './types'
+import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, InventoryItem, OpeningHours, OwnerDashboard, Profile, QueueItem, Review, StaffMember, Service, Session, StaffRole, WorkDay } from './types'
 
 // Sample data for working on the screens without a database.
 // Development only: api.ts never loads this file in a production build.
@@ -749,6 +749,18 @@ export const demoApi: Api = {
     member.full_name = fullName.trim()
     if (member.role !== 'owner') member.branch_id = branchId
   },
+  async barberHours(barberId) {
+    await wait(150)
+    needStaff()
+    return (barberWeeks.get(barberId) ?? branchWeek(barberId)).map((d) => ({ ...d }))
+  },
+  async setBarberHours(barberId, days) {
+    await wait()
+    needOwner()
+    if (new Set(days.map((d) => d.weekday)).size !== days.length) throw new Error('Each day can only be listed once')
+    if (days.some((d) => d.ends_at <= d.starts_at)) throw new Error('Each day must end after it starts')
+    barberWeeks.set(barberId, days.map((d) => ({ ...d })))
+  },
   async setStaffPassword(_id, password) {
     await wait(400)
     needOwner()
@@ -925,6 +937,15 @@ function queueRow(id: string): SampleRow {
 
 // the sample barber's sales this session (today), added on top of the made-up numbers
 const earnings = { services_count: 0, services_centavos: 0, products_centavos: 0, tips_centavos: 0 }
+
+// sample barbers' working weeks; a barber nobody changed works their branch's opening hours
+const barberWeeks = new Map<string, WorkDay[]>()
+function branchWeek(barberId: string): WorkDay[] {
+  const branchId = barbers.find((b) => b.id === barberId)?.branch_id ?? staffMembers.find((m) => m.barber_id === barberId)?.branch_id ?? 'br1'
+  return hours
+    .filter((h) => h.branch_id === branchId)
+    .map((h) => ({ weekday: h.weekday, starts_at: h.opens_at.slice(0, 5), ends_at: h.closes_at.slice(0, 5) }))
+}
 
 // sample two-step state (a fresh page load signs you out in sample mode anyway)
 const twoStep = { on: false, verified: false }
