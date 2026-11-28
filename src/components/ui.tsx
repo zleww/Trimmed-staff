@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Link, type LinkProps } from 'react-router'
 import { initials } from '../lib/format'
 import type { BookingStatus } from '../lib/types'
-import { Alert, Ban, CheckCircle, Clock, Eye, EyeOff, Info, Scissors, User } from './icons'
+import { Alert, Ban, CheckCircle, Clock, Eye, EyeOff, Info, Scissors, User, X } from './icons'
 
 // ---------------------------------------------------------------------------
 // Buttons
@@ -290,23 +290,51 @@ export function Dialog({
   onClose: () => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
+  // the latest onClose, so the key listener below doesn't need re-adding
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  })
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
     if (open && !dialog.open) dialog.showModal()
     if (!open && dialog.open) dialog.close()
   }, [open])
+  // Esc closes it ourselves: the browser's own Esc is skipped sometimes
+  // (Chrome after a second press, or while a video has the focus)
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      close.current()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [open])
   return (
     <dialog
       ref={ref}
       onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
+      // a tap on the dark area around the box closes it
+      onClick={(event) => event.target === ref.current && onClose()}
       aria-labelledby="dialog-title"
       className="m-auto w-[calc(100%-2rem)] max-w-md rounded-3xl border border-glass-line bg-card p-0 text-ink shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm"
     >
       <div className="p-6">
-        <h2 id="dialog-title" className="text-[19px] font-semibold tracking-tight">
-          {title}
-        </h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 id="dialog-title" className="pt-2 text-[19px] font-semibold tracking-tight">
+            {title}
+          </h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="-mt-1 -mr-2 grid size-11 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-raised hover:text-ink">
+            <X size={20} />
+          </button>
+        </div>
         <div className="mt-3">{children}</div>
       </div>
     </dialog>

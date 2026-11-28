@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { peso } from '../lib/format'
 import type { OwnerDashboard } from '../lib/types'
 import { useLoad } from '../lib/useLoad'
+import { AppointmentCalendar, Insights, QuickActions, TodayOverview } from './OwnerHome'
 
 type Days = '7' | '30' | '90'
 const dayFmt = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', timeZone: 'UTC' })
@@ -39,8 +40,17 @@ export function DashboardPage() {
           <Notice tone="bad">{dash.error}</Notice>
         </div>
       )}
+      {/* today first: how the day is going, then the things the owner does most */}
+      <div className="mt-5 space-y-4">
+        <TodayOverview />
+        <QuickActions />
+      </div>
       {!d && !dash.error && <Loading />}
       {d && <Board d={d} days={days} setDays={setDays} />}
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <AppointmentCalendar />
+        <Insights />
+      </div>
     </div>
   )
 }

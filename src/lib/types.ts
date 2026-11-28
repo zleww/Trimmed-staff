@@ -241,6 +241,13 @@ export type Api = {
   refuseCancel(id: string, reason: string): Promise<void>
   /** owner only: every number on the owner's home screen */
   ownerDashboard(days: 7 | 30 | 90): Promise<OwnerDashboard>
+  /** owner only: today against last week, and quick insights */
+  ownerOverview(): Promise<OwnerOverview>
+  /** owner only: appointments per day for the month of this Manila date */
+  appointmentCalendar(month: string): Promise<CalendarDay[]>
+  /** owner only: rows for the CSV downloads (Manila dates, up to a year) */
+  exportSales(from: string, to: string): Promise<SaleExport[]>
+  exportAppointments(from: string, to: string): Promise<AppointmentExport[]>
 
   // front desk: today's queue, walk-ins, sales, closing the day
   queueForDay(date: string): Promise<QueueItem[]>
@@ -406,10 +413,83 @@ export type BranchStats = {
   barbers: number
 }
 
-export type InventoryItem = { id: string; name: string; price_centavos: number; stock_qty: number; low_stock_at: number; active: boolean }
+export const PRODUCT_CATEGORIES = ['Styling', 'Hair care', 'Beard care', 'Tools', 'Other'] as const
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number]
+
+/** A product as the owner and desk see it (with the real count). */
+export type InventoryItem = {
+  id: string
+  name: string
+  category: ProductCategory
+  size: string | null
+  description: string | null
+  photo_url: string | null
+  price_centavos: number
+  stock_qty: number
+  low_stock_at: number
+  active: boolean
+}
 
 /** id null = a new product */
-export type ProductInput = { id: string | null; name: string; price_centavos: number; low_stock_at: number; active: boolean }
+export type ProductInput = {
+  id: string | null
+  name: string
+  category: ProductCategory
+  size: string
+  description: string
+  price_centavos: number
+  low_stock_at: number
+  active: boolean
+  /** a new square photo to upload, if one was picked */
+  photo: Blob | null
+}
 
 /** What the authenticator app needs to scan when two-step sign-in is turned on. */
 export type TwoStepSetup = { factorId: string; qrCode: string; secret: string }
+
+/** The owner's "today" numbers and quick insights. */
+export type OwnerOverview = {
+  today: { appointments: number; last_week: number; walk_ins: number; completed: number; in_chair: number; waiting: number; no_shows: number }
+  insights: {
+    /** 0-23, Manila */
+    busiest_hour: number | null
+    /** 0 = Sunday */
+    busiest_weekday: number | null
+    top_barber_week: { name: string; cuts: number } | null
+    /** percent */
+    no_show_rate: number | null
+    returning_rate: number | null
+    average_sale_centavos: number | null
+    low_stock: number
+    out_of_stock: number
+  }
+}
+
+export type CalendarDay = { day: string; total: number; done: number; walk_ins: number; requests: number }
+
+export type SaleExport = {
+  sold_at: string
+  business_date: string
+  items: string | null
+  barbers: string | null
+  paid_with: string | null
+  subtotal_centavos: number
+  discount_centavos: number
+  total_centavos: number
+  tips_centavos: number
+  voided: boolean
+  recorded_by: string
+}
+
+export type AppointmentExport = {
+  starts_at: string
+  code: string
+  customer: string
+  mobile: string | null
+  service: string
+  barber: string | null
+  branch: string | null
+  source: string
+  status: string
+  price_centavos: number
+}

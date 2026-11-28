@@ -1,5 +1,5 @@
 import type { AuthError, PostgrestError, SupabaseClient } from '@supabase/supabase-js'
-import type { Api, AttendanceRow, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, Earnings, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole, ScheduleItem, Shift, WorkDay } from './types'
+import type { Api, AttendanceRow, Barber, BarberReviews, Branch, BranchReviews, Booking, BookingRequest, ContactMessage, BranchStats, CloseResult, Earnings, InventoryItem, Inspo, OwnerDashboard, Product, Profile, QueueItem, Rating, StaffMember, Session, SignupDetails, StaffRole, ScheduleItem, Shift, WorkDay, OwnerOverview, CalendarDay, SaleExport, AppointmentExport } from './types'
 
 // Turns database and sign-in errors into plain sentences.
 // Our own database functions already raise plain messages (code P0001), so
@@ -34,6 +34,7 @@ function check<T>(result: { data: T; error: PostgrestError | null }): T {
 
 const AVATARS = 'avatars'
 const BARBER_PHOTOS = 'barber-photos'
+const PRODUCT_PHOTOS = 'product-photos'
 const INSPO = 'inspo'
 
 type User = { id: string; email?: string; user_metadata?: Record<string, unknown> } | null | undefined
@@ -395,6 +396,22 @@ export function createSupabaseApi(db: SupabaseClient): Api {
       check(await db.rpc('refuse_cancel', { p_id: id, p_reason: reason }))
     },
 
+    async ownerOverview() {
+      return check(await db.rpc('owner_overview')) as OwnerOverview
+    },
+
+    async appointmentCalendar(month) {
+      return check(await db.rpc('appointment_calendar', { p_month: month })) as CalendarDay[]
+    },
+
+    async exportSales(from, to) {
+      return check(await db.rpc('export_sales', { p_from: from, p_to: to })) as SaleExport[]
+    },
+
+    async exportAppointments(from, to) {
+      return check(await db.rpc('export_appointments', { p_from: from, p_to: to })) as AppointmentExport[]
+    },
+
     async ownerDashboard(days) {
       return check(await db.rpc('owner_dashboard', { p_days: days })) as OwnerDashboard
     },
@@ -568,15 +585,40 @@ export function createSupabaseApi(db: SupabaseClient): Api {
     },
 
     async inventory() {
-      return check(
-        await db.from('products').select('id, name, price_centavos, stock_qty, low_stock_at, active').order('active', { ascending: false }).order('name'),
-      ) as InventoryItem[]
+      const rows = check(
+        await db
+          .from('products')
+          .select('id, name, category, size, description, photo_path, price_centavos, stock_qty, low_stock_at, active')
+          .order('active', { ascending: false })
+          .order('name'),
+      ) as (Omit<InventoryItem, 'photo_url'> & { photo_path: string | null })[]
+      return rows.map(({ photo_path, ...item }) => ({
+        ...item,
+        photo_url: photo_path ? db.storage.from(PRODUCT_PHOTOS).getPublicUrl(photo_path).data.publicUrl : null,
+      }))
     },
 
     async saveProduct(product) {
-      const fields = { name: product.name, price_centavos: product.price_centavos, low_stock_at: product.low_stock_at, active: product.active }
-      if (product.id) check(await db.from('products').update(fields).eq('id', product.id))
-      else check(await db.from('products').insert(fields))
+      const fields = {
+        name: product.name,
+        category: product.category,
+        size: product.size.trim() || null,
+        description: product.description.trim() || null,
+        price_centavos: product.price_centavos,
+        low_stock_at: product.low_stock_at,
+        active: product.active,
+      }
+      const saved = product.id
+        ? (check(await db.from('products').update(fields).eq('id', product.id).select('id').single()) as { id: string })
+        : (check(await db.from('products').insert(fields).select('id').single()) as { id: string })
+      if (product.photo) {
+        // a new file name each time, so phones don't keep showing the old cached photo
+        const ext = product.photo.type === 'image/webp' ? 'webp' : 'jpg'
+        const path = `${saved.id}-${crypto.randomUUID()}.${ext}`
+        const upload = await db.storage.from(PRODUCT_PHOTOS).upload(path, product.photo, { contentType: product.photo.type, upsert: false })
+        if (upload.error) throw new Error("The product was saved, but the photo didn't upload. Try again.")
+        check(await db.from('products').update({ photo_path: path }).eq('id', saved.id))
+      }
     },
 
     async stockIn(id, qty, note) {

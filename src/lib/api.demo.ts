@@ -1,4 +1,4 @@
-import { manilaDateOf, manilaToday, manilaWallClock, addDays } from './dates'
+import { manilaDateOf, manilaToday, manilaWallClock, addDays, weekdayOf } from './dates'
 import type { Api, Barber, BarberReviews, Booking, Branch, BookingRequest, BookingRules, BranchReviews, ContactMessage, Inspo, InventoryItem, OpeningHours, OwnerDashboard, Profile, QueueItem, Review, StaffMember, Service, Session, StaffRole, Shift, WorkDay } from './types'
 
 // Sample data for working on the screens without a database.
@@ -585,6 +585,74 @@ export const demoApi: Api = {
     booking.reason = reason.trim()
   },
 
+  async ownerOverview() {
+    await wait()
+    needOwner()
+    const today = manilaToday()
+    const todays = queue.filter((q) => manilaDateOf(q.starts_at ?? q.checked_in) === today)
+    return {
+      today: {
+        appointments: todays.filter((q) => ['booked', 'checked_in', 'in_chair', 'done', 'no_show'].includes(q.status)).length,
+        last_week: 4,
+        walk_ins: todays.filter((q) => q.source === 'walk_in' && q.status !== 'cancelled').length,
+        completed: todays.filter((q) => q.status === 'done').length,
+        in_chair: todays.filter((q) => q.status === 'in_chair').length,
+        waiting: todays.filter((q) => q.status === 'checked_in').length,
+        no_shows: todays.filter((q) => q.status === 'no_show').length,
+      },
+      insights: {
+        busiest_hour: 17,
+        busiest_weekday: 6,
+        top_barber_week: { name: 'Sample Barber 1', cuts: 14 },
+        no_show_rate: 6,
+        returning_rate: 58,
+        average_sale_centavos: 31500,
+        low_stock: products.filter((p) => p.active && p.stock_qty > 0 && p.stock_qty <= p.low_stock_at).length,
+        out_of_stock: products.filter((p) => p.active && p.stock_qty === 0).length,
+      },
+    }
+  },
+  async appointmentCalendar(month) {
+    await wait()
+    needOwner()
+    const first = month.slice(0, 8) + '01'
+    const today = manilaToday()
+    const days: { day: string; total: number; done: number; walk_ins: number; requests: number }[] = []
+    for (let d = first; d.slice(0, 7) === first.slice(0, 7); d = addDays(d, 1)) {
+      // made-up counts: busier on weekends, none on Mondays
+      const wd = weekdayOf(d)
+      const total = d === today ? queue.length : wd === 1 ? 0 : 3 + ((Number(d.slice(8)) * 7) % 6) + (wd === 6 || wd === 0 ? 4 : 0)
+      days.push({ day: d, total, done: d < today ? total : 0, walk_ins: Math.floor(total / 3), requests: d > today && total ? 1 : 0 })
+    }
+    return days
+  },
+  async exportSales(from, to) {
+    await wait()
+    needOwner()
+    if (to < from) throw new Error('Pick a range of up to a year')
+    const at = (time: string) => manilaWallClock(manilaToday(), time).toISOString()
+    return [
+      { sold_at: at('10:15'), business_date: manilaToday(), items: 'Classic cut; Sample matte pomade', barbers: 'Sample Barber 1', paid_with: 'cash', subtotal_centavos: 60000, discount_centavos: 0, total_centavos: 60000, tips_centavos: 5000, voided: false, recorded_by: 'Sample Desk One' },
+      { sold_at: at('11:40'), business_date: manilaToday(), items: 'Skin fade', barbers: 'Sample Barber 2', paid_with: 'gcash 1234567890123', subtotal_centavos: 35000, discount_centavos: 0, total_centavos: 35000, tips_centavos: 0, voided: false, recorded_by: 'Sample Desk One' },
+    ]
+  },
+  async exportAppointments(from, to) {
+    await wait()
+    needOwner()
+    if (to < from) throw new Error('Pick a range of up to a year')
+    return queue.map((q) => ({
+      starts_at: q.starts_at ?? q.checked_in,
+      code: q.code,
+      customer: q.customer_name,
+      mobile: q.customer_mobile,
+      service: q.service_name,
+      barber: q.barber_name,
+      branch: 'Sample Branch One',
+      source: q.source,
+      status: q.status,
+      price_centavos: q.price_centavos,
+    }))
+  },
   async ownerDashboard(days) {
     await wait()
     if (demoRole() !== 'owner') throw new Error('Not allowed')
@@ -901,7 +969,7 @@ export const demoApi: Api = {
   },
   async inventory() {
     await wait()
-    needOwner()
+    needDesk()
     return products.map((p) => ({ ...p }))
   },
   async saveProduct(input) {
@@ -910,12 +978,22 @@ export const demoApi: Api = {
     if (input.name.trim().length < 2) throw new Error('Enter the product name')
     if (input.price_centavos <= 0) throw new Error('Enter a price above zero')
     const found = products.find((p) => p.id === input.id)
-    if (found) Object.assign(found, { name: input.name.trim(), price_centavos: input.price_centavos, low_stock_at: input.low_stock_at, active: input.active })
-    else products.push({ id: crypto.randomUUID(), name: input.name.trim(), price_centavos: input.price_centavos, low_stock_at: input.low_stock_at, active: input.active, stock_qty: 0 })
+    const fields = {
+      name: input.name.trim(),
+      category: input.category,
+      size: input.size.trim() || null,
+      description: input.description.trim() || null,
+      price_centavos: input.price_centavos,
+      low_stock_at: input.low_stock_at,
+      active: input.active,
+    }
+    const photo_url = input.photo ? URL.createObjectURL(input.photo) : (found?.photo_url ?? null)
+    if (found) Object.assign(found, fields, { photo_url })
+    else products.push({ id: crypto.randomUUID(), ...fields, photo_url, stock_qty: 0 })
   },
   async stockIn(id, qty) {
     await wait()
-    needOwner()
+    needDesk()
     if (!Number.isInteger(qty) || qty < 1 || qty > 1000) throw new Error('Quantity must be 1 to 1000')
     products.find((p) => p.id === id)!.stock_qty += qty
   },
@@ -988,9 +1066,11 @@ function sampleDashboard(days: number): OwnerDashboard {
 type SampleRow = QueueItem & { checked_in: string }
 let dayClosed = false
 const products: InventoryItem[] = [
-  { id: 'p1', name: 'Sample matte pomade', price_centavos: 35000, stock_qty: 6, low_stock_at: 3, active: true },
-  { id: 'p2', name: 'Sample shine pomade', price_centavos: 32000, stock_qty: 2, low_stock_at: 3, active: true },
-  { id: 'p3', name: 'Sample hair clay', price_centavos: 38000, stock_qty: 0, low_stock_at: 2, active: true },
+  { id: 'p1', name: 'Sample matte pomade', category: 'Styling', size: '100 g', description: 'Strong hold, no shine.', photo_url: null, price_centavos: 35000, stock_qty: 6, low_stock_at: 3, active: true },
+  { id: 'p2', name: 'Sample shine pomade', category: 'Styling', size: '100 g', description: null, photo_url: null, price_centavos: 32000, stock_qty: 2, low_stock_at: 3, active: true },
+  { id: 'p3', name: 'Sample hair clay', category: 'Styling', size: '80 g', description: null, photo_url: null, price_centavos: 38000, stock_qty: 0, low_stock_at: 2, active: true },
+  { id: 'p4', name: 'Sample beard oil', category: 'Beard care', size: '30 ml', description: 'Softens and calms the itch.', photo_url: null, price_centavos: 48000, stock_qty: 9, low_stock_at: 3, active: true },
+  { id: 'p5', name: 'Sample hair tonic', category: 'Hair care', size: '250 ml', description: null, photo_url: null, price_centavos: 38000, stock_qty: 14, low_stock_at: 4, active: true },
 ]
 
 function needOwner() {

@@ -34,6 +34,7 @@ export function StaffLayout() {
     { to: '/today', label: 'Today', icon: Users },
     { to: '/requests', label: 'Requests', icon: Calendar, badge: alerts.requests },
     { to: '/messages', label: 'Messages', icon: Mail },
+    { to: '/inventory', label: 'Inventory', icon: List },
     { to: '/close', label: 'Close day', icon: CheckCircle },
   ]
   const owner: NavItem[] = [
@@ -41,7 +42,6 @@ export function StaffLayout() {
     { to: '/branches', label: 'Branches', icon: MapPin },
     { to: '/staff', label: 'Staff', icon: User },
     { to: '/attendance', label: 'Attendance', icon: Clock },
-    { to: '/inventory', label: 'Inventory', icon: List },
   ]
   const barber: NavItem[] = [
     { to: '/chair', label: 'My chair', icon: Scissors },

@@ -38,7 +38,7 @@ export default function App() {
             <Route path="branches" element={<OwnerOnly page={<BranchesPage />} />} />
             <Route path="staff" element={<OwnerOnly page={<StaffPage />} />} />
             <Route path="attendance" element={<OwnerOnly page={<AttendancePage />} />} />
-            <Route path="inventory" element={<OwnerOnly page={<InventoryPage />} />} />
+            <Route path="inventory" element={<DeskOnly page={<InventoryPage />} />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -260,3 +260,19 @@ export const Wallet = (p: IconProps) => (
     <path d="M16 14h.01" />
   </Icon>
 )
+
+export const Download = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 4v11" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M5 20h14" />
+  </Icon>
+)
+
+export const Box = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m3 7.5 9-4.5 9 4.5v9l-9 4.5-9-4.5z" />
+    <path d="m3 7.5 9 4.5 9-4.5" />
+    <path d="M12 12v9" />
+  </Icon>
+)
