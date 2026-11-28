@@ -178,6 +178,13 @@ export function useAlerts(role: StaffRole | null | undefined, userId: string | u
     }
   }, [check])
 
+  // the banner tucks itself away after 10 seconds; the menu number stays
+  useEffect(() => {
+    if (!banner) return
+    const timer = setTimeout(() => setBanner(null), 10_000)
+    return () => clearTimeout(timer)
+  }, [banner])
+
   // "(2) Trimmed staff" in the browser tab
   const total = requests + bookings
   useEffect(() => {

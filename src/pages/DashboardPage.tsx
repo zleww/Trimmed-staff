@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { peso } from '../lib/format'
 import type { OwnerDashboard } from '../lib/types'
 import { useLoad } from '../lib/useLoad'
-import { AppointmentCalendar, Insights, QuickActions, TodayOverview } from './OwnerHome'
+import { AppointmentCalendar, Insights, QuickActions, TodayHero } from './OwnerHome'
 
 type Days = '7' | '30' | '90'
 const dayFmt = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', timeZone: 'UTC' })
@@ -25,29 +25,56 @@ export function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-[1400px]">
-      <h1 className="text-[30px] leading-tight sm:text-[34px]">Dashboard</h1>
-      {twoStep.data && !twoStep.data.on && (
-        <Link to="/security" className="mt-4 flex items-center justify-between gap-3 rounded-[10px] border border-warn/30 bg-warn-bg px-4 py-3 text-[15px] text-warn">
-          <span className="flex items-center gap-2">
-            <Alert size={18} className="shrink-0" />
-            Turn on two-step sign-in so a stolen password can't open your sales.
-          </span>
-          <ArrowRight size={18} className="shrink-0" />
-        </Link>
+      {/* 1. who and when, with the owner's actions on the right */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[14px] text-ink-3">{greeting()}</p>
+          <h1 className="text-[30px] leading-tight sm:text-[34px]">Dashboard</h1>
+        </div>
+        <QuickActions />
+      </div>
+
+      {/* 2. only when something needs the owner */}
+      {((d && d.waiting_requests > 0) || (twoStep.data && !twoStep.data.on)) && (
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {d && d.waiting_requests > 0 && (
+            <Link to="/requests" className="flex items-center justify-between gap-3 rounded-[12px] border border-gold/40 bg-card px-4 py-3 text-[15px] hover:border-gold">
+              <span>
+                <span className="num font-semibold">{d.waiting_requests}</span> booking {d.waiting_requests === 1 ? 'request is' : 'requests are'} waiting
+              </span>
+              <ArrowRight size={18} className="shrink-0 text-gold" />
+            </Link>
+          )}
+          {twoStep.data && !twoStep.data.on && (
+            <Link to="/security" className="flex items-center justify-between gap-3 rounded-[12px] border border-warn/30 bg-warn-bg px-4 py-3 text-[14px] text-warn">
+              <span className="flex items-center gap-2">
+                <Alert size={18} className="shrink-0" />
+                Turn on two-step sign-in to protect your sales.
+              </span>
+              <ArrowRight size={18} className="shrink-0" />
+            </Link>
+          )}
+        </div>
       )}
       {dash.error && (
-        <div className="mt-6">
+        <div className="mt-5">
           <Notice tone="bad">{dash.error}</Notice>
         </div>
       )}
-      {/* today first: how the day is going, then the things the owner does most */}
-      <div className="mt-5 space-y-4">
-        <TodayOverview />
-        <QuickActions />
+
+      {/* 3. today, the biggest card */}
+      <div className="mt-5">
+        <TodayHero revenue={d ? d.today.revenue_centavos : null} sales={d ? d.today.sales : null} />
       </div>
+
+      {/* 4. how the shop is doing over time */}
+      <h2 className="label mt-8 mb-3">Performance</h2>
       {!d && !dash.error && <Loading />}
       {d && <Board d={d} days={days} setDays={setDays} />}
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+
+      {/* 5. planning ahead */}
+      <h2 className="label mt-8 mb-3">Schedule and insights</h2>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <AppointmentCalendar />
         <Insights />
       </div>
@@ -55,24 +82,20 @@ export function DashboardPage() {
   )
 }
 
+// "Saturday, November 28 · Good afternoon" by the Manila clock
+function greeting(): string {
+  const now = new Date()
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' }).format(now))
+  const part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  return `${part} · ${new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' }).format(now)}`
+}
+
 function Board({ d, days, setDays }: { d: OwnerDashboard; days: Days; setDays: (days: Days) => void }) {
   const profit = d.period.revenue_centavos - d.period.expenses_centavos
   const change = d.period.previous_centavos ? Math.round(((d.period.revenue_centavos - d.period.previous_centavos) / d.period.previous_centavos) * 100) : null
 
   return (
-    <div className="rise mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_360px]">
-      {d.waiting_requests > 0 && (
-        <Link
-          to="/requests"
-          className="flex items-center justify-between gap-3 rounded-[10px] border border-line bg-card px-5 py-3.5 text-[15px] hover:border-ink-3 xl:col-span-3"
-        >
-          <span>
-            <span className="num font-semibold">{d.waiting_requests}</span> booking {d.waiting_requests === 1 ? 'request is' : 'requests are'} waiting for an answer
-          </span>
-          <ArrowRight size={18} className="shrink-0 text-gold" />
-        </Link>
-      )}
-
+    <div className="rise grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_360px]">
       {/* sales chart: the big one */}
       <Card className="relative overflow-hidden max-xl:order-1 xl:col-span-2">
         {/* a soft amber light under the chart */}
@@ -180,17 +203,13 @@ function Board({ d, days, setDays }: { d: OwnerDashboard; days: Days; setDays: (
         )}
       </Card>
 
-      {/* small numbers */}
-      <div className="grid grid-cols-2 gap-4 max-xl:order-2 xl:grid-cols-1">
-        <Stat label="Today" value={whole(d.today.revenue_centavos)} note={`${d.today.sales} ${d.today.sales === 1 ? 'sale' : 'sales'}`} />
-        <Stat label="After expenses" value={whole(profit)} note={`${whole(d.period.expenses_centavos)} spent`} />
-        <Stat
-          className="col-span-2 xl:col-span-1"
-          label="Bookings today"
-          value={String(d.bookings_today.total)}
-          note={`${d.bookings_today.done} done · ${d.bookings_today.no_show} no-show`}
-        />
-      </div>
+      {/* money left after expenses for the same period */}
+      <Stat
+        className="max-xl:order-2"
+        label={`After expenses, last ${d.days} days`}
+        value={whole(profit)}
+        note={`${whole(d.period.expenses_centavos)} spent · ${d.period.sales} sales`}
+      />
     </div>
   )
 }

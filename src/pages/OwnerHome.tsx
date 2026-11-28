@@ -12,78 +12,97 @@ import { SellDialog } from './InventoryPage'
 
 const hourText = (h: number) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`
 
-/** Today's numbers and the owner's quick actions, at the top of the dashboard. */
-export function TodayOverview() {
+/**
+ * The most important card: how today is going. Today's sales big, then the
+ * appointment numbers small, then what's happening right now.
+ */
+export function TodayHero({ revenue, sales }: { revenue: number | null; sales: number | null }) {
   const overview = useLoad(() => api.ownerOverview(), [])
   const o = overview.data
   if (overview.error) return <Notice tone="bad">{overview.error}</Notice>
-  if (!o) return <Skeleton className="h-28" />
+  if (!o) return <Skeleton className="h-44" />
 
   const diff = o.today.appointments - o.today.last_week
+  const weekday = WEEKDAYS[weekdayOf(manilaToday())]
   return (
-    <section aria-label="Today" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Tile
-        label="Today's appointments"
-        value={o.today.appointments}
-        note={
-          <span className={diff > 0 ? 'text-good' : diff < 0 ? 'text-bad' : ''}>
-            {diff === 0 ? 'Same as' : `${diff > 0 ? '+' : ''}${diff} vs`} last {WEEKDAYS[weekdayOf(manilaToday())]} ({o.today.last_week})
-          </span>
-        }
-      />
-      <Tile label="Walk-ins today" value={o.today.walk_ins} note={`${o.today.waiting} waiting now`} />
-      <Tile label="Completed today" value={o.today.completed} note={`${o.today.in_chair} in the chair now`} />
-      <Tile label="No-shows today" value={o.today.no_shows} note={o.today.no_shows ? 'Check the Today list' : 'None so far'} />
+    <section aria-labelledby="today-title" className="relative overflow-hidden rounded-[18px] border border-line bg-card p-5 sm:p-6">
+      {/* a soft amber light so this card reads first */}
+      <div aria-hidden="true" className="pointer-events-none absolute -top-24 -left-16 h-56 w-80 bg-[radial-gradient(closest-side,var(--glow-warm),transparent)]" />
+      <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-center">
+        <div>
+          <h2 id="today-title" className="label">
+            Today
+          </h2>
+          <p className="num mt-2 text-[40px] leading-none font-medium sm:text-[48px]">{revenue === null ? '—' : peso(Math.round(revenue / 100) * 100)}</p>
+          <p className="mt-2 text-[14px] text-ink-3">
+            {sales === null ? 'Sales today' : `${sales} ${sales === 1 ? 'sale' : 'sales'} so far`}
+          </p>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 lg:border-l lg:border-line lg:pl-6">
+          <Mini
+            label="Appointments"
+            value={o.today.appointments}
+            note={
+              <span className={diff > 0 ? 'text-good' : diff < 0 ? 'text-bad' : ''}>
+                {diff === 0 ? 'Same as' : `${diff > 0 ? '+' : ''}${diff} vs`} last {weekday}
+              </span>
+            }
+          />
+          <Mini label="Walk-ins" value={o.today.walk_ins} note={`${o.today.waiting} waiting now`} />
+          <Mini label="Completed" value={o.today.completed} note={`${o.today.in_chair} in the chair`} />
+          <Mini label="No-shows" value={o.today.no_shows} note={o.today.no_shows ? 'See the Today list' : 'None so far'} />
+        </dl>
+      </div>
     </section>
   )
 }
 
-function Tile({ label, value, note }: { label: string; value: number; note: ReactNode }) {
+function Mini({ label, value, note }: { label: string; value: number; note: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-[14px] border border-line bg-card p-4">
-      <p className="text-[13px] text-ink-3">{label}</p>
-      <p className="num mt-1 text-[30px] leading-tight font-medium">{value}</p>
-      <p className="mt-0.5 truncate text-[13px] text-ink-3">{note}</p>
+    <div className="min-w-0">
+      <dt className="text-[13px] text-ink-3">{label}</dt>
+      <dd className="num text-[26px] leading-tight font-medium">{value}</dd>
+      <dd className="truncate text-[12px] text-ink-3">{note}</dd>
     </div>
   )
 }
 
-/** Record a sale, sell a product, update stock, download a CSV. */
+/**
+ * The owner's shortcuts, next to the page title. Record sale is the one main
+ * button; the rest are smaller so they don't compete with the numbers.
+ */
 export function QuickActions() {
   const navigate = useNavigate()
   const [open, setOpen] = useState<'sell' | 'csv' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const products = useLoad(() => (open === 'sell' ? api.inventory() : Promise.resolve([])), [open])
 
-  const actions: { label: string; hint: string; Icon: typeof Plus; run: () => void }[] = [
-    { label: 'Record sale', hint: 'Collect from a customer in the chair', Icon: Plus, run: () => navigate('/today') },
-    { label: 'Sell product', hint: 'Someone only buying a product', Icon: List, run: () => setOpen('sell') },
-    { label: 'Update stock', hint: 'Receive a delivery or fix a count', Icon: Box, run: () => navigate('/inventory') },
-    { label: 'Download CSV', hint: 'Sales, appointments or products', Icon: Download, run: () => setOpen('csv') },
+  const more: { label: string; Icon: typeof Plus; run: () => void }[] = [
+    { label: 'Sell product', Icon: List, run: () => setOpen('sell') },
+    { label: 'Update stock', Icon: Box, run: () => navigate('/inventory') },
+    { label: 'Download CSV', Icon: Download, run: () => setOpen('csv') },
   ]
 
   return (
-    <section aria-label="Quick actions">
+    <div className="w-full sm:w-auto">
+      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+        <Button className="col-span-3 h-12 px-5" onClick={() => navigate('/today')}>
+          <Plus size={18} />
+          Record sale
+        </Button>
+        {more.map(({ label, Icon, run }) => (
+          // phones: icon above the word, so "Sell product" stays on one line
+          <Button key={label} variant="secondary" className="h-16 flex-col gap-1 px-2 text-[13px] whitespace-nowrap sm:h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-[14px]" onClick={run}>
+            <Icon size={16} />
+            {label}
+          </Button>
+        ))}
+      </div>
       {message && (
-        <div className="mb-3">
+        <div className="mt-3">
           <Notice tone="good">{message}</Notice>
         </div>
       )}
-      <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {actions.map(({ label, hint, Icon, run }) => (
-          <li key={label}>
-            <button type="button" onClick={run} className="flex h-full w-full items-center gap-3 rounded-[14px] border border-line bg-card p-4 text-left transition hover:border-ink-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-raised text-gold">
-                <Icon size={18} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[15px] font-medium">{label}</span>
-                <span className="block text-[12px] text-ink-3 max-sm:hidden">{hint}</span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
       {open === 'sell' && products.data && (
         <SellDialog
           items={products.data.filter((p) => p.active && p.stock_qty > 0)}
@@ -95,7 +114,7 @@ export function QuickActions() {
         />
       )}
       {open === 'csv' && <CsvDialog onClose={() => setOpen(null)} />}
-    </section>
+    </div>
   )
 }
 
@@ -281,7 +300,7 @@ export function AppointmentCalendar() {
 
   return (
     <section aria-labelledby="calendar-title" className="min-w-0 rounded-[14px] border border-line bg-card p-5">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <h2 id="calendar-title" className="text-[20px]">
           Appointments
         </h2>
@@ -289,7 +308,7 @@ export function AppointmentCalendar() {
           <button type="button" onClick={() => shift(-1)} aria-label="Previous month" className="grid size-10 place-items-center rounded-full text-ink-2 hover:bg-raised hover:text-ink">
             <ChevronLeft size={18} />
           </button>
-          <span className="min-w-[8.5rem] text-center text-[15px] font-medium">{monthFmt.format(new Date(`${month}T00:00:00Z`))}</span>
+          <span className="min-w-[8rem] text-center text-[15px] font-medium">{monthFmt.format(new Date(`${month}T00:00:00Z`))}</span>
           <button type="button" onClick={() => shift(1)} aria-label="Next month" className="grid size-10 place-items-center rounded-full text-ink-2 hover:bg-raised hover:text-ink">
             <ChevronRight size={18} />
           </button>

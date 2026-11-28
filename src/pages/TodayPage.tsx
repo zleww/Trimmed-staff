@@ -200,6 +200,13 @@ export function TodayPage() {
 
 export function Row({ row, children, below }: { row: QueueItem; children?: ReactNode; below?: ReactNode }) {
   const status = look[row.status]
+  const badge = (className: string) =>
+    status && (
+      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-medium ${status.className} ${className}`}>
+        <status.Icon size={14} />
+        {status.label}
+      </span>
+    )
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[14px] border border-line bg-card px-4 py-3">
       <span className="num w-[4.5rem] shrink-0 text-[15px] font-medium whitespace-nowrap">{row.starts_at ? formatTime(row.starts_at) : 'Walk-in'}</span>
@@ -210,16 +217,14 @@ export function Row({ row, children, below }: { row: QueueItem; children?: React
           {row.source !== 'walk_in' && <span className="num tracking-wider"> · {row.code}</span>}
         </span>
       </span>
-      {/* on phones the status and buttons share the second line, so the name gets the full width */}
-      <span className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-        {status && (
-          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-medium max-sm:mr-auto ${status.className}`}>
-            <status.Icon size={14} />
-            {status.label}
-          </span>
-        )}
-        {children}
-      </span>
+      {/* phones: the status sits up by the time, so the buttons get the whole second line */}
+      {badge('sm:hidden')}
+      {(status || children) && (
+        <span className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+          {badge('max-sm:hidden')}
+          {children}
+        </span>
+      )}
       {below && <div className="w-full">{below}</div>}
     </li>
   )

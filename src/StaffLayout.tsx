@@ -57,21 +57,25 @@ export function StaffLayout() {
   const security: NavItem = { to: '/security', label: 'Security', icon: Settings }
   const all = groups.flatMap((g) => g.items)
   // phones: up to four tabs; when there are more pages, three tabs + More
-  const tabs = all.length + 1 <= 4 ? [...all, security] : all.slice(0, 3)
-  const more = all.length + 1 <= 4 ? [] : [...all.slice(tabs.length), security]
+  // phones and tablets: the pages used most during the day get the tabs, the rest go under More
+  const favourites = staffRole === 'owner' ? ['/', '/today', '/requests'] : ['/today', '/requests', '/inventory']
+  const fits = all.length + 1 <= 4
+  const tabs = fits ? [...all, security] : favourites.map((to) => all.find((i) => i.to === to)!).filter(Boolean)
+  const more = fits ? [] : [...all.filter((i) => !tabs.includes(i)), security]
   const leave = () => void signOut()
   const role = staffRole === 'owner' ? 'Owner' : staffRole === 'barber' ? 'Barber' : 'Front desk'
   const name = profile?.full_name ?? role
 
   return (
     <div className="min-h-dvh">
-      {/* left panel with the page buttons (tablet and up) */}
-      <aside className="fixed inset-y-4 left-4 z-20 hidden w-56 flex-col rounded-[14px] border border-line bg-card p-3 shadow-[inset_0_1px_0_var(--sheen)] md:flex">
+      {/* left panel with the page buttons (laptop and up; tablets and phones get the bottom bar) */}
+      <aside className="fixed inset-y-4 left-4 z-20 hidden w-56 flex-col rounded-[14px] border border-line bg-card p-3 shadow-[inset_0_1px_0_var(--sheen)] lg:flex">
         <Link to="/" className="flex items-center gap-2.5 px-2 py-1.5">
           <LogoMark size={36} />
           <span className="text-[17px] font-medium">Trimmed</span>
         </Link>
-        <nav aria-label="Staff" className="mt-5 flex flex-col gap-5">
+        {/* the list scrolls on short screens; Security and Sign out stay at the bottom */}
+        <nav aria-label="Staff" className="mt-4 -mr-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
           {groups.map((group) => (
             <div key={group.title}>
               <p className="label px-3 pb-1.5 text-[11px]">{group.title}</p>
@@ -84,19 +88,19 @@ export function StaffLayout() {
           ))}
         </nav>
         {/* pinned to the bottom, like settings */}
-        <div className="mt-auto">
+        <div className="mt-2 border-t border-line pt-2">
           <PanelLink item={{ to: '/security', label: 'Security', icon: Settings }} />
         </div>
-        <button onClick={leave} className="flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] text-ink-2 hover:bg-raised/60 hover:text-ink">
+        <button onClick={leave} className="flex min-h-11 items-center gap-3 rounded-[10px] px-3 text-[15px] text-ink-2 hover:bg-raised/60 hover:text-ink">
           <LogOut size={19} />
           Sign out
         </button>
       </aside>
 
-      <div className="px-4 pt-4 pb-28 sm:px-6 md:ml-[256px] md:pr-6 md:pb-8 md:pl-0">
+      <div className="px-4 pt-4 pb-28 sm:px-6 lg:ml-[256px] lg:pr-6 lg:pb-8 lg:pl-0">
         {/* top bar */}
         <header className="flex items-center justify-between gap-3">
-          <Link to="/" className="md:hidden" aria-label="Home">
+          <Link to="/" className="lg:hidden" aria-label="Home">
             <LogoMark size={34} />
           </Link>
           <TodayLine />
@@ -109,7 +113,7 @@ export function StaffLayout() {
                 {name !== role && <span className="block text-[12px] text-ink-3">{role}</span>}
               </span>
             </div>
-            <button onClick={leave} aria-label="Sign out" className="grid size-12 place-items-center rounded-[10px] border border-line bg-card text-ink-2 md:hidden">
+            <button onClick={leave} aria-label="Sign out" className="grid size-12 place-items-center rounded-[10px] border border-line bg-card text-ink-2 lg:hidden">
               <LogOut size={18} />
             </button>
           </div>
@@ -129,7 +133,7 @@ export function StaffLayout() {
           key={alerts.banner.id}
           role="status"
           aria-live="polite"
-          className="rise fixed inset-x-3 top-3 z-40 mx-auto flex max-w-md items-start gap-3 rounded-[14px] border border-gold/40 bg-card p-4 shadow-2xl md:top-6"
+          className="rise fixed inset-x-3 top-3 z-40 mx-auto flex max-w-md items-start gap-3 rounded-[14px] border border-gold/40 bg-card p-4 shadow-2xl lg:top-6"
         >
           <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-gold text-bg">
             <Calendar size={18} />
@@ -154,7 +158,7 @@ export function StaffLayout() {
       )}
 
       {/* tab bar (phone) */}
-      <nav aria-label="Staff" className="fixed inset-x-3 bottom-3 z-20 flex rounded-[14px] border border-line bg-card p-1.5 md:hidden">
+      <nav aria-label="Staff" className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 mx-auto flex max-w-xl rounded-[14px] border border-line bg-card p-1.5 shadow-2xl lg:hidden">
         {tabs.map(({ to, label, icon: Icon, end, badge }) => (
           <NavLink
             key={to}
@@ -188,10 +192,10 @@ export function StaffLayout() {
 
       {/* the rest of the pages, as a sheet over the tab bar (phone) */}
       {sheet && (
-        <div className="fixed inset-0 z-30 bg-black/60 md:hidden" onClick={() => setSheet(false)}>
+        <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setSheet(false)}>
           <nav
             aria-label="More pages"
-            className="rise absolute inset-x-3 bottom-3 rounded-[14px] border border-line bg-card p-2"
+            className="rise absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] mx-auto max-h-[80dvh] max-w-xl overflow-y-auto rounded-[14px] border border-line bg-card p-2"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-3 py-1">
@@ -237,7 +241,7 @@ export function BarberOnly({ page }: { page: ReactNode }) {
 // the date at the top left, worked out once when the screen opens
 function TodayLine() {
   const [text] = useState(() => today.format(new Date()))
-  return <p className="hidden text-[14px] text-ink-3 md:block">{text}</p>
+  return <p className="hidden text-[14px] text-ink-3 lg:block">{text}</p>
 }
 
 function ThemeToggle() {
@@ -268,7 +272,7 @@ function PanelLink({ item, onPick }: { item: NavItem; onPick?: () => void }) {
       end={end}
       onClick={onPick}
       className={({ isActive }) =>
-        `relative flex min-h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] transition-colors ${
+        `relative flex min-h-11 shrink-0 items-center gap-3 rounded-[10px] px-3 text-[15px] transition-colors ${
           isActive ? 'bg-raised text-ink' : 'text-ink-2 hover:bg-raised/60 hover:text-ink'
         }`
       }
@@ -276,7 +280,7 @@ function PanelLink({ item, onPick }: { item: NavItem; onPick?: () => void }) {
       {({ isActive }) => (
         <>
           {/* the gold marker on the current page */}
-          {isActive && <span aria-hidden="true" className="absolute -left-3 h-5 w-[3px] rounded-r bg-gold" />}
+          {isActive && <span aria-hidden="true" className="absolute left-0 h-5 w-[3px] rounded-r bg-gold" />}
           <Icon size={19} />
           {label}
           <Badge count={badge} className="ml-auto" />

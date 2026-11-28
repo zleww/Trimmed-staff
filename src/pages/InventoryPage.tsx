@@ -106,12 +106,12 @@ export function InventoryPage() {
       </div>
 
       {/* the numbers at a glance */}
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <Stat label="Products for sale" value={String(sold.length)} />
         <Stat label="Low stock" value={String(low.length)} tone={low.length ? 'warn' : undefined} onClick={() => setStock('low')} />
         <Stat label="Out of stock" value={String(out.length)} tone={out.length ? 'bad' : undefined} onClick={() => setStock('out')} />
         {owner ? (
-          <Stat label="Stock value (selling price)" value={peso(value)} />
+          <Stat label="Stock value" value={peso(value)} />
         ) : (
           <Stat label="Categories" value={String(new Set(sold.map((i) => i.category)).size)} />
         )}
@@ -122,11 +122,11 @@ export function InventoryPage() {
         {items.error && <Notice tone="bad">{items.error}</Notice>}
 
         {/* search and filters */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-end">
+          <div className="col-span-2 sm:flex-1">
             <Field label="Search" placeholder="Name, size or category" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <div className="sm:w-48">
+          <div className="min-w-0 sm:w-48">
             <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">All categories</option>
               {PRODUCT_CATEGORIES.map((c) => (
@@ -136,16 +136,18 @@ export function InventoryPage() {
               ))}
             </Select>
           </div>
-          <Segmented
-            label="Stock"
-            value={stock}
-            onChange={setStock}
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'low', label: 'Low' },
-              { value: 'out', label: 'Out' },
-            ]}
-          />
+          <div className="flex items-end">
+            <Segmented
+              label="Stock"
+              value={stock}
+              onChange={setStock}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'low', label: 'Low' },
+                { value: 'out', label: 'Out' },
+              ]}
+            />
+          </div>
         </div>
 
         {items.loading && !items.data && <Skeleton className="h-64" />}
@@ -157,12 +159,12 @@ export function InventoryPage() {
 
         {/* wide screens: a table */}
         {shown.length > 0 && (
-          <div className="hidden overflow-hidden rounded-[14px] border border-line bg-card md:block">
+          <div className="hidden overflow-x-auto rounded-[14px] border border-line bg-card md:block">
             <table className="w-full text-left text-[15px]">
               <thead className="border-b border-line text-[13px] text-ink-3">
                 <tr>
                   <th className="px-4 py-3 font-medium">Product</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
+                  <th className="hidden px-4 py-3 font-medium xl:table-cell">Category</th>
                   <th className="px-4 py-3 text-right font-medium">Price</th>
                   <th className="px-4 py-3 text-right font-medium">Stock</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -181,11 +183,18 @@ export function InventoryPage() {
                           <Thumb item={item} />
                           <span className="min-w-0">
                             <span className="block truncate font-medium">{item.name}</span>
-                            {item.size && <span className="block text-[13px] text-ink-3">{item.size}</span>}
+                            {/* the category sits under the name until there's room for its own column */}
+                            <span className="block text-[13px] text-ink-3">
+                              <span className="xl:hidden">
+                                {item.category}
+                                {item.size && ' · '}
+                              </span>
+                              {item.size}
+                            </span>
                           </span>
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="hidden px-4 py-3 xl:table-cell">
                         <span className="rounded-full bg-raised px-2.5 py-1 text-[13px] whitespace-nowrap text-ink-2">{item.category}</span>
                       </td>
                       <td className="num px-4 py-3 text-right">{peso(item.price_centavos)}</td>
@@ -247,16 +256,16 @@ export function InventoryPage() {
 function Stat({ label, value, tone, onClick }: { label: string; value: string; tone?: 'warn' | 'bad'; onClick?: () => void }) {
   const body = (
     <>
-      <span className={`num block text-[26px] leading-tight font-medium ${tone === 'warn' ? 'text-warn' : tone === 'bad' ? 'text-bad' : ''}`}>{value}</span>
-      <span className="block text-[13px] text-ink-3">{label}</span>
+      <span className={`num block text-[22px] leading-tight font-medium sm:text-[26px] ${tone === 'warn' ? 'text-warn' : tone === 'bad' ? 'text-bad' : ''}`}>{value}</span>
+      <span className="block truncate text-[12px] text-ink-3 sm:text-[13px]">{label}</span>
     </>
   )
   return onClick ? (
-    <button type="button" onClick={onClick} className="min-w-0 rounded-[14px] border border-line bg-card p-4 text-left transition hover:border-ink-3">
+    <button type="button" onClick={onClick} className="min-w-0 rounded-[14px] border border-line bg-card p-3 text-left transition hover:border-ink-3 sm:p-4">
       {body}
     </button>
   ) : (
-    <div className="min-w-0 rounded-[14px] border border-line bg-card p-4">{body}</div>
+    <div className="min-w-0 rounded-[14px] border border-line bg-card p-3 sm:p-4">{body}</div>
   )
 }
 
